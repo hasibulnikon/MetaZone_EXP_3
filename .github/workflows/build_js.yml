@@ -1,0 +1,458 @@
+name: Build Windows EXE (JS frontend)
+
+# This builds the NEW pywebview/JS-frontend MetaZone (this folder),
+# not the original CustomTkinter app. Adapted from the original app's
+# .github/workflows/build.yml — same real-ExifTool-not-choco-stub
+# logic (proven necessary there), same exiftool_pkg bundling path that
+# core/utils.py's find_exiftool() already looks for when frozen.
+#
+# v0.9.8: FFmpeg and Ghostscript are now downloaded and bundled the
+# same way ExifTool already is (ffmpeg_pkg / gs_pkg -- see
+# core/bin_finder.py), and a real post-build smoke test
+# ("MetaZone.exe --diag") actually runs the produced EXE and checks it
+# finds all four bundled tools before the workflow is allowed to
+# succeed. That smoke test, and this workflow overall, have NOT been
+# run on a real Windows machine or GitHub Actions runner as of this
+# change (no Windows environment was available where this was
+# written) -- the download URLs, archive layouts, and extraction
+# commands below were each verified for real against a real download
+# in a Linux sandbox (real HTTP 200s, real `unzip -l` / real `7z x`
+# runs, real file layouts confirmed), but "does gswin64c.exe actually
+# render correctly when invoked this way from inside a PyInstaller
+# onefile bundle on Windows 11" specifically has not been. Treat the
+# first real run of this workflow as the actual test, and expect to
+# iterate on it from the logs.
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'MetaZone_js/**'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: MetaZone_js
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Exclude build paths from Windows Defender
+        shell: pwsh
+        run: |
+          # v0.9.8 patch 2: the previous fix (correct diag-file path,
+          # --diag running before the heavy import chain) did not
+          # actually solve the reported failure -- on the real run,
+          # `MetaZone.exe --diag` produced NO diag file AND an empty
+          # $LASTEXITCODE (the error line rendered as "exited  --",
+          # $diagExit interpolating to nothing), which only happens
+          # when the `&` invocation never actually launched a process
+          # in the first place -- $LASTEXITCODE is a native-command-only
+          # variable and is never touched if the exe wasn't there (or
+          # wasn't launchable) to begin with. The build step immediately
+          # before it confirms dist\MetaZone.exe exists, so something
+          # removed or blocked it in between.
+          #
+          # This is a well-documented, common failure mode for
+          # PyInstaller onefile builds on GitHub's windows-latest
+          # runners: Windows Defender's real-time protection scans (and
+          # sometimes quarantines/deletes) a freshly-written, unsigned
+          # onefile .exe that embeds several other executables inside
+          # it (ffmpeg.exe, gswin64c.exe, exiftool.exe) -- exactly this
+          # app's shape -- as a false-positive trojan/dropper. That scan
+          # can land in the few-second window between the build step
+          # writing dist\MetaZone.exe and the self-check step launching
+          # it, which matches the symptom exactly (file present right
+          # after build, unusable moments later, and the self-check step
+          # finishing suspiciously fast when it did). Excluding the
+          # workspace and RUNNER_TEMP from real-time scanning up front
+          # (before anything is downloaded or built) is the standard
+          # fix. Runners are ephemeral and destroyed after the job, so
+          # there's no persistent security tradeoff from doing this.
+          try {
+            Add-MpPreference -ExclusionPath "$env:GITHUB_WORKSPACE" -ErrorAction Stop
+            Add-MpPreference -ExclusionPath "$env:RUNNER_TEMP" -ErrorAction Stop
+            Add-MpPreference -ExclusionProcess "MetaZone.exe" -ErrorAction Stop
+            Write-Host "Windows Defender exclusions added for: $env:GITHUB_WORKSPACE, $env:RUNNER_TEMP, MetaZone.exe"
+            Get-MpPreference | Select-Object -ExpandProperty ExclusionPath
+          } catch {
+            Write-Host "Could not add Defender exclusions (non-fatal, continuing): $_"
+          }
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Read app version
+        id: appver
+        shell: pwsh
+        run: |
+          $line = Select-String -Path "backend\core\constants.py" -Pattern 'APP_VERSION\s*=\s*"([^"]+)"'
+          if (-not $line) {
+            Write-Error "Could not find APP_VERSION in backend/core/constants.py"; exit 1
+          }
+          $version = $line.Matches[0].Groups[1].Value
+          echo "version=$version" >> $env:GITHUB_OUTPUT
+          Write-Host "App version: $version"
+
+      - name: Install ExifTool
+        shell: pwsh
+        run: |
+          # community.chocolatey.org has occasional outages that return
+          # a 503 on the package feed (seen for real: "Response status
+          # code does not indicate success: 503 (Service Unavailable)"
+          # -> "Unable to find package 'exiftool'"). That's Chocolatey's
+          # servers, not this workflow or the app, but `choco install`
+          # doesn't retry on its own -- so retry here with backoff
+          # instead of failing the whole build on a transient blip.
+          $maxAttempts = 5
+          $installed = $false
+          for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
+            Write-Host "choco install exiftool -y --no-progress (attempt $attempt/$maxAttempts)"
+            choco install exiftool -y --no-progress
+            if ($LASTEXITCODE -eq 0) {
+              $installed = $true
+              break
+            }
+            Write-Host "choco install failed (exit $LASTEXITCODE) -- likely a transient Chocolatey feed issue. Retrying..."
+            if ($attempt -lt $maxAttempts) {
+              Start-Sleep -Seconds ([Math]::Min(60, [Math]::Pow(2, $attempt) * 5))
+            }
+          }
+          if (-not $installed) {
+            Write-Error "choco install exiftool failed after $maxAttempts attempts. This looks like a Chocolatey community feed outage (community.chocolatey.org returned 503), not an app or workflow bug -- check https://status.chocolatey.org/ and re-run the workflow once it recovers."
+            exit 1
+          }
+
+          # Same real binary vs. Chocolatey ShimGen stub issue already
+          # solved in the original app's workflow: grab the actual
+          # exiftool.exe + its exiftool_files runtime folder from
+          # choco's lib/tools directory, not the PATH shim.
+          $realExe = Get-ChildItem "C:\ProgramData\chocolatey\lib\exiftool\tools" `
+            -Recurse -Filter "exiftool.exe" -ErrorAction SilentlyContinue |
+            Select-Object -First 1
+          if (-not $realExe) {
+            Write-Error "Could not find exiftool.exe under chocolatey\lib\exiftool\tools — choco install may have failed or the package layout changed."
+            exit 1
+          }
+          $srcDir = $realExe.Directory.FullName
+          $filesDir = Join-Path $srcDir "exiftool_files"
+          if (-not (Test-Path $filesDir)) {
+            Write-Error "Found exiftool.exe at $($realExe.FullName) but no sibling exiftool_files folder — the app will crash at runtime without it."
+            exit 1
+          }
+          New-Item -ItemType Directory -Force -Path "C:\ExifTool" | Out-Null
+          Copy-Item $realExe.FullName "C:\ExifTool\exiftool.exe" -Force
+          Copy-Item $filesDir "C:\ExifTool\exiftool_files" -Recurse -Force
+          Write-Host "ExifTool exe: $((Get-Item 'C:\ExifTool\exiftool.exe').Length) bytes"
+
+      - name: Download and stage FFmpeg (ffmpeg_pkg)
+        shell: pwsh
+        run: |
+          # Pinned to BtbN/FFmpeg-Builds' floating "latest" release tag,
+          # which they maintain specifically to give a stable download
+          # URL (see https://github.com/BtbN/FFmpeg-Builds#readme).
+          # LGPL "shared" variant deliberately, not GPL/static:
+          #   - LGPL avoids pulling in GPL-only codecs MetaZone doesn't
+          #     need (it only ever does fixed-interval PNG frame
+          #     extraction + ffprobe reads, never encoding/muxing) --
+          #     simpler redistribution story for a free app.
+          #   - "shared" (DLLs + small exes) rather than "static" (one
+          #     huge self-contained exe) makes LGPL's own "user can
+          #     relink against a different build of the library"
+          #     requirement trivially satisfiable: the DLLs just sit
+          #     next to the exe as ordinary files.
+          # Real download + real archive contents (bin/ffmpeg.exe,
+          # bin/ffprobe.exe, 7 DLLs, ~73MB) were verified against this
+          # exact URL before this workflow was written -- see
+          # CHANGELOG.md's v0.9.8 entry.
+          $ffmpegUrl = "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-lgpl-shared.zip"
+          $zipPath = "$env:RUNNER_TEMP\ffmpeg.zip"
+          $maxAttempts = 3
+          $downloaded = $false
+          for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
+            Write-Host "Downloading FFmpeg (attempt $attempt/$maxAttempts)..."
+            try {
+              Invoke-WebRequest -Uri $ffmpegUrl -OutFile $zipPath -UseBasicParsing
+              $downloaded = $true
+              break
+            } catch {
+              Write-Host "Download failed: $_"
+              if ($attempt -lt $maxAttempts) { Start-Sleep -Seconds (10 * $attempt) }
+            }
+          }
+          if (-not $downloaded) { Write-Error "Could not download FFmpeg after $maxAttempts attempts from $ffmpegUrl"; exit 1 }
+
+          Expand-Archive -Path $zipPath -DestinationPath "$env:RUNNER_TEMP\ffmpeg_extract" -Force
+          $binDir = Get-ChildItem "$env:RUNNER_TEMP\ffmpeg_extract" -Recurse -Directory -Filter "bin" | Select-Object -First 1
+          if (-not $binDir) {
+            Write-Error "FFmpeg zip did not contain a bin/ folder — BtbN's archive layout may have changed. Check https://github.com/BtbN/FFmpeg-Builds/releases/tag/latest manually."
+            exit 1
+          }
+
+          $ffmpegPkg = "$env:RUNNER_TEMP\ffmpeg_pkg"
+          New-Item -ItemType Directory -Force -Path $ffmpegPkg | Out-Null
+          Copy-Item "$($binDir.FullName)\ffmpeg.exe" $ffmpegPkg -Force
+          Copy-Item "$($binDir.FullName)\ffprobe.exe" $ffmpegPkg -Force
+          Copy-Item "$($binDir.FullName)\*.dll" $ffmpegPkg -Force
+          $ffmpegLicense = Get-ChildItem "$env:RUNNER_TEMP\ffmpeg_extract" -Recurse -Filter "LICENSE.txt" | Select-Object -First 1
+          if ($ffmpegLicense) { Copy-Item $ffmpegLicense.FullName "$ffmpegPkg\LICENSE-FFmpeg.txt" -Force }
+
+          if (-not (Test-Path "$ffmpegPkg\ffmpeg.exe")) { Write-Error "ffmpeg.exe missing after staging."; exit 1 }
+          if (-not (Test-Path "$ffmpegPkg\ffprobe.exe")) { Write-Error "ffprobe.exe missing after staging."; exit 1 }
+          $files = Get-ChildItem $ffmpegPkg
+          $mb = [math]::Round((($files | Measure-Object Length -Sum).Sum) / 1MB, 1)
+          Write-Host "ffmpeg_pkg staged: $($files.Count) files, $mb MB -> $ffmpegPkg"
+          echo "FFMPEG_PKG=$ffmpegPkg" >> $env:GITHUB_ENV
+
+      - name: Download and stage Ghostscript (gs_pkg)
+        shell: pwsh
+        run: |
+          # Official Windows Ghostscript releases are an NSIS
+          # self-extracting installer, not a plain zip. 7-Zip (already
+          # present on windows-latest runners at the path below) can
+          # extract an NSIS installer's payload directly, without ever
+          # running or installing it -- verified for real against this
+          # exact URL (real `7z x`, real resulting bin/Resource/lib/
+          # iccprofiles layout, ~43MB of what's actually needed out of
+          # the 65MB installer) before this workflow was written -- see
+          # CHANGELOG.md's v0.9.8 entry. NOT verified: that the
+          # extracted gswin64c.exe actually runs correctly on a real
+          # Windows machine when invoked with the explicit -I/
+          # -sICCProfilesDir flags vector/renderer.py now passes for a
+          # bundled copy (see that file) -- no Windows machine was
+          # available to check that part.
+          #
+          # Ghostscript is AGPLv3 (or a paid commercial license,
+          # neither of which MetaZone needs since it's a free app that
+          # only ever invokes gs as a separate subprocess -- "mere
+          # aggregation", not linking). It is bundled here as an
+          # unmodified upstream binary; its own LICENSE file is copied
+          # alongside it for redistribution below.
+          $gsUrl = "https://github.com/ArtifexSoftware/ghostpdl-downloads/releases/download/gs10080/gs10080w64.exe"
+          $exePath = "$env:RUNNER_TEMP\gs_installer.exe"
+          $maxAttempts = 3
+          $downloaded = $false
+          for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
+            Write-Host "Downloading Ghostscript (attempt $attempt/$maxAttempts)..."
+            try {
+              Invoke-WebRequest -Uri $gsUrl -OutFile $exePath -UseBasicParsing
+              $downloaded = $true
+              break
+            } catch {
+              Write-Host "Download failed: $_"
+              if ($attempt -lt $maxAttempts) { Start-Sleep -Seconds (10 * $attempt) }
+            }
+          }
+          if (-not $downloaded) { Write-Error "Could not download Ghostscript after $maxAttempts attempts from $gsUrl. If gs10080 has been superseded, update the version/URL in this step."; exit 1 }
+
+          $sevenZip = "C:\Program Files\7-Zip\7z.exe"
+          if (-not (Test-Path $sevenZip)) { $sevenZip = "7z" }
+          $extractDir = "$env:RUNNER_TEMP\gs_extract"
+          & $sevenZip x $exePath "-o$extractDir" -y | Out-Null
+          if ($LASTEXITCODE -ne 0) { Write-Error "7-Zip could not extract the Ghostscript installer (exit $LASTEXITCODE)."; exit 1 }
+
+          $gsPkg = "$env:RUNNER_TEMP\gs_pkg"
+          New-Item -ItemType Directory -Force -Path "$gsPkg\bin" | Out-Null
+          $gsExe = Get-ChildItem "$extractDir\bin" -Filter "gswin64c.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $gsExe) {
+            Write-Error "gswin64c.exe not found under $extractDir\bin — Ghostscript's installer layout may have changed. Check https://github.com/ArtifexSoftware/ghostpdl-downloads/releases manually."
+            exit 1
+          }
+          Copy-Item "$extractDir\bin\gswin64c.exe" "$gsPkg\bin" -Force
+          Copy-Item "$extractDir\bin\gsdll64.dll" "$gsPkg\bin" -Force
+          Copy-Item "$extractDir\Resource" "$gsPkg\Resource" -Recurse -Force
+          Copy-Item "$extractDir\lib" "$gsPkg\lib" -Recurse -Force
+          Copy-Item "$extractDir\iccprofiles" "$gsPkg\iccprofiles" -Recurse -Force
+          Copy-Item "$extractDir\doc\COPYING" "$gsPkg\LICENSE-Ghostscript.txt" -Force -ErrorAction SilentlyContinue
+
+          if (-not (Test-Path "$gsPkg\bin\gswin64c.exe")) { Write-Error "gswin64c.exe missing after staging."; exit 1 }
+          if (-not (Test-Path "$gsPkg\bin\gsdll64.dll")) { Write-Error "gsdll64.dll missing after staging -- gswin64c.exe will not run without it."; exit 1 }
+          $mb = [math]::Round(((Get-ChildItem $gsPkg -Recurse | Measure-Object Length -Sum).Sum) / 1MB, 1)
+          Write-Host "gs_pkg staged: $mb MB -> $gsPkg"
+          echo "GS_PKG=$gsPkg" >> $env:GITHUB_ENV
+
+      - name: Build EXE with PyInstaller
+        shell: pwsh
+        run: |
+          $icon_arg = ""
+          if (Test-Path "icon.ico") { $icon_arg = "--icon=icon.ico" }
+
+          $pyinstaller_args = @(
+            "--onefile",
+            "--windowed",
+            "--name=MetaZone",
+            "--add-data=frontend;frontend",
+            "--add-data=backend;backend",
+            "--add-data=C:\ExifTool\exiftool.exe;exiftool_pkg",
+            "--add-data=C:\ExifTool\exiftool_files;exiftool_pkg\exiftool_files",
+            "--add-data=$env:FFMPEG_PKG;ffmpeg_pkg",
+            "--add-data=$env:GS_PKG;gs_pkg",
+            "--collect-all=Pillow",
+            "--collect-all=pymupdf",
+            "--collect-all=lxml",
+            "--hidden-import=sqlite3"
+          )
+          # --collect-all=pymupdf/lxml: required because backend/ is
+          # bundled as plain --add-data, not import-analyzed by
+          # PyInstaller (see app.py's BACKEND_DIR comment) -- so
+          # PyInstaller has no other way to discover and bundle these
+          # two packages' compiled extensions (pymupdf's MuPDF core,
+          # lxml's libxml2/libxslt bindings). Without this, the Vector
+          # engine imports would fail at runtime on a clean machine
+          # even though `pip install -r requirements.txt` succeeded in
+          # this same CI job — a working `pip install` and a working
+          # frozen bundle are not the same guarantee for a compiled-
+          # extension package. Same reasoning --collect-all=Pillow was
+          # already here for.
+
+          if ($icon_arg) { $pyinstaller_args += $icon_arg }
+          if (Test-Path "icon.ico") { $pyinstaller_args += "--add-data=icon.ico;." }
+
+          $pyinstaller_args += "app.py"
+
+          Write-Host "pyinstaller $($pyinstaller_args -join ' ')"
+          & python -m PyInstaller @pyinstaller_args
+
+      - name: Verify EXE was created
+        shell: pwsh
+        run: |
+          if (Test-Path "dist\MetaZone.exe") {
+            $item = Get-Item "dist\MetaZone.exe"
+            Write-Host "SUCCESS: $($item.Length / 1MB) MB"
+            Write-Host "SHA256: $((Get-FileHash $item.FullName -Algorithm SHA256).Hash)"
+          } else {
+            Write-Error "MetaZone.exe not found!"; exit 1
+          }
+
+      - name: Self-check bundled dependencies (MetaZone.exe --diag)
+        shell: pwsh
+        run: |
+          # Actually runs the just-built EXE (no GUI window -- --diag
+          # exits before webview.start() is ever called) and confirms
+          # it can locate ExifTool, ffmpeg, ffprobe, and Ghostscript
+          # inside its own onefile bundle. This is real, not aspirational
+          # verification: a Windows Defender / SmartScreen prompt could
+          # still block interactive double-click launches (a separate,
+          # known PyInstaller-onefile-on-Windows concern this step does
+          # NOT cover), but the actual binary-discovery logic that
+          # every dropped file depends on is exercised for real here.
+          #
+          # app.py writes metazone_diag.txt next to sys.executable,
+          # i.e. next to MetaZone.exe itself -- dist\metazone_diag.txt,
+          # NOT a bare "metazone_diag.txt" relative to this step's cwd
+          # (MetaZone_js\, per the job-level working-directory default).
+          #
+          # v0.9.8 patch 2: switched from `& exe --diag` + $LASTEXITCODE
+          # to Start-Process -PassThru -Wait. On the real run, `&` left
+          # $LASTEXITCODE completely unset ("exited  --" in the log, an
+          # empty interpolation) -- that variable is only ever touched
+          # by a *successfully launched* native command, so an empty
+          # value means the process never actually started (most likely
+          # Defender removed/blocked the freshly-built, unsigned,
+          # multi-exe-embedding onefile binary in the gap between the
+          # previous step and this one -- see the new "Exclude build
+          # paths from Windows Defender" step earlier in this job, which
+          # should prevent that going forward). Start-Process gives an
+          # explicit ExitCode object and a real error if the process
+          # genuinely can't be created, instead of silently leaving
+          # $LASTEXITCODE untouched -- so this step can no longer
+          # confuse "the exe never ran" with "the exe ran and reported a
+          # real missing dependency."
+          $exePath = Resolve-Path "dist\MetaZone.exe" -ErrorAction SilentlyContinue
+          if (-not $exePath) {
+            Write-Error "dist\MetaZone.exe does not exist at self-check time, even though the previous step confirmed it right after the build. This points to something (most likely Windows Defender / an AV agent) removing or quarantining it in between -- check the runner's Windows Defender protection history / Microsoft-Windows-Windows Defender event log if this recurs after the new Defender-exclusion step."
+            exit 1
+          }
+          Write-Host "Launching: $exePath --diag"
+
+          $diagPath = Join-Path (Split-Path $exePath) "metazone_diag.txt"
+          if (Test-Path $diagPath) { Remove-Item $diagPath -Force }
+          $stdoutLog = "$env:RUNNER_TEMP\metazone_diag_stdout.txt"
+          $stderrLog = "$env:RUNNER_TEMP\metazone_diag_stderr.txt"
+
+          $proc = $null
+          try {
+            $proc = Start-Process -FilePath $exePath -ArgumentList "--diag" `
+              -PassThru -Wait -WindowStyle Hidden `
+              -RedirectStandardOutput $stdoutLog -RedirectStandardError $stderrLog `
+              -ErrorAction Stop
+          } catch {
+            Write-Error "Start-Process could not launch MetaZone.exe at all: $_. This is a process-creation failure (e.g. blocked by AV/SmartScreen, corrupted download, or a missing OS-level dependency like the VC++ runtime) rather than anything metazone_diag.txt or --diag's own logic would ever report."
+            exit 1
+          }
+
+          $diagExit = $proc.ExitCode
+          Write-Host "Process exit code: $diagExit"
+          if (Test-Path $stdoutLog) { Write-Host "---- stdout ----"; Get-Content $stdoutLog; Write-Host "----------------" }
+          if (Test-Path $stderrLog) { Write-Host "---- stderr ----"; Get-Content $stderrLog; Write-Host "----------------" }
+
+          if (Test-Path $diagPath) {
+            Write-Host "---- $diagPath ----"
+            Get-Content $diagPath
+            Write-Host "----------------------------"
+          } else {
+            Write-Host "$diagPath was not created -- --diag's own stdout above (if any) is all that's available. This itself means --diag crashed or exited before it could write its report, which is a packaging bug worth investigating even if `$diagExit happens to be 0."
+          }
+
+          if ($diagExit -ne 0) {
+            Write-Error "MetaZone.exe --diag exited $diagExit -- see the report above for exactly which dependency is missing and where it looked."
+            exit 1
+          }
+          if (-not (Test-Path $diagPath)) {
+            Write-Error "MetaZone.exe --diag exited 0 but never wrote $diagPath -- treating this as a failure since the self-check can't actually confirm what passed."
+            exit 1
+          }
+          Write-Host "Dependency self-check passed."
+
+      - name: Upload EXE artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: MetaZone-JS-Windows
+          path: MetaZone_js\dist\MetaZone.exe
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: js-${{ steps.appver.outputs.version }}
+          name: MetaZone (JS Frontend) ${{ steps.appver.outputs.version }}
+          body: |
+            ## MetaZone (JS Frontend) ${{ steps.appver.outputs.version }}
+
+            New pywebview + HTML/JS frontend, real Python backend
+            underneath (unchanged metadata/embedding/AI logic). Built
+            to replace the old CustomTkinter UI, which felt sluggish
+            on large batches.
+
+            ### Status
+            This is an active migration — most screens are real and
+            working (Meta Generator, Meta Embedder, Settings,
+            Dashboard, Prompt-to-Prompt), but this build has not yet
+            been manually verified on a real Windows machine. Please
+            test and report back anything broken.
+
+            Not yet included: Image-to-Prompt mode, Smart Workflow,
+            real drag-and-drop file import (use the Browse button for
+            now).
+
+            ### How to use
+            1. Download **MetaZone.exe** — double-click, no install needed
+            2. Open **Settings**, add your API key(s)
+            3. Click **Browse images…** to import (drag-and-drop not
+               wired up yet)
+            4. Click **Generate**
+            5. Use **Meta Embedder** to write metadata into your files
+          files: MetaZone_js\dist\MetaZone.exe
+          make_latest: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
