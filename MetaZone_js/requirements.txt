@@ -1,0 +1,46 @@
+pywebview>=6.2
+Pillow
+psutil
+requests
+# customtkinter/tkinterdnd2 intentionally NOT required by backend/ anymore.
+# core/utils.py's two CTk-specific functions (make_thumb, make_thumb_min_edge)
+# still import customtkinter defensively (see comment in that file) but are
+# not called by bridge.py yet -- they'll be replaced with a plain-PIL +
+# base64 <img> path in Stage 4/5, at which point this note goes away.
+
+# --- v0.9.7: real Vector engine (backend/vector/), wired into the
+# existing Generate workflow's Auto Detect dispatch ---
+lxml            # real SVG structural parsing (svg_structure.py)
+pymupdf         # real PDF-compatible .ai structural read + render, AND real
+                # SVG rendering (renderer.py) -- deliberately used for SVG
+                # instead of cairosvg, which needs the native Cairo C library
+                # (not installable via pip; requires bundling a GTK DLL chain
+                # on Windows, a fragile path with many unresolved upstream
+                # issues). Tradeoff: MuPDF's SVG renderer doesn't render
+                # gradient fills (shows solid black) -- real gradient counts/
+                # colors are still captured correctly in the structural data
+                # either way, just not in the visual AI preview.
+# Legacy .ai / true .eps rendering (renderer.py's render_via_ghostscript)
+# needs the Ghostscript binary ('gs') installed separately -- it's a
+# system tool, not a pip package. Install via:
+#   Windows/macOS: https://ghostscript.com/releases/gsdnld.html
+#   Debian/Ubuntu: sudo apt install ghostscript
+#   macOS (brew):  brew install ghostscript
+# Structural reading of these files (ps_structure.py) works without
+# Ghostscript -- only the visual preview/AI-analysis step needs it.
+# A missing Ghostscript degrades gracefully: the vector card still
+# generates from real structural facts + filename alone (see
+# vector/prompt.py's has_preview=False path) instead of failing outright.
+
+# --- v0.9.7: real Video engine (backend/video/), wired into the
+# existing Generate workflow's Auto Detect dispatch ---
+# video/technical.py and video/frames.py call the `ffmpeg`/`ffprobe`
+# binaries directly (no pip package needed) -- install FFmpeg via:
+#   Windows/macOS: https://ffmpeg.org/download.html
+#   Debian/Ubuntu: sudo apt install ffmpeg
+#   macOS (brew):  brew install ffmpeg
+# A missing ffmpeg/ffprobe fails a dropped video file's card with a
+# clear "ffmpeg is not installed" error rather than a silent hang.
+
+# --- build-only, not needed to run from source ---
+pyinstaller

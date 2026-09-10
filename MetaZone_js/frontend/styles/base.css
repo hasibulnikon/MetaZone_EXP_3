@@ -1,0 +1,1420 @@
+:root {
+  --bg1: #1a1c22;
+  --bg2: #22252c;
+  --nav-bg: #16181d;
+  --accent: #5b8cff;
+  --text: #e7e9ee;
+  --text-dim: #9aa0ac;
+  --border: #2e323b;
+  --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+* { box-sizing: border-box; }
+
+/* ---- Scrollbars follow the active theme (dark or white) instead of
+   the OS/browser default -- every color here is a CSS var already
+   updated by theme.js, so this repaints automatically on theme
+   switch, no separate light/dark rule needed. ---- */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: var(--bg1); }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 6px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-dim); }
+* { scrollbar-width: thin; scrollbar-color: var(--border) var(--bg1); }
+
+body {
+  margin: 0;
+  font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
+  background: var(--bg1);
+  color: var(--text);
+  overflow: hidden;
+  height: var(--app-100vh, 100vh);
+  display: flex;
+  flex-direction: column;
+}
+
+.app-shell { display: flex; flex: 1; min-height: 0; }
+
+/* v0.8.9.2: rail narrowed 72px->62px and nav items given a little more
+   breathing room (margin-bottom bumped below) -- items were reading as
+   hugging each other edge-to-edge. */
+.sidebar {
+  width: 62px;
+  background: var(--nav-bg);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 14px 3px;
+  flex-shrink: 0;
+}
+
+.brand { font-weight: 600; font-size: 18px; padding: 8px 10px 20px; }
+
+.nav-item {
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  text-align: left;
+  padding: 10px 12px;
+  border-radius: 8px;
+  font-size: 14px;
+  cursor: pointer;
+  /* v0.8.9.2: vertical spacing is set once, below, by the more
+     specific ".sidebar .nav-item" rule (margin-bottom: 10px there) --
+     no margin-bottom here so there's only one place to look. */
+  transition: background-color 150ms var(--ease), color 150ms var(--ease), transform 110ms var(--ease);
+}
+
+.nav-item:hover { background: rgba(255,255,255,0.05); color: var(--text); }
+.nav-item:active { transform: scale(0.96); }
+.nav-item.active { background: var(--bg2); color: var(--text); }
+.sidebar .nav-item .nav-icon { transition: transform 150ms var(--ease); }
+.sidebar .nav-item.active .nav-icon { transform: scale(1.08); }
+
+.content { flex: 1; overflow-y: auto; padding: 14px 16px; }
+
+/* ---- Dropzone: single clickable box ----
+   .dropzone-media fills the whole box and holds either the
+   instructional text (nothing imported yet) or the import grid (after
+   import/drop) -- mutually exclusive, never both. There's no separate
+   Browse column inside the box anymore: the whole box IS the browse
+   trigger while empty (see app.js's dropzone click handler), and a
+   small standalone Browse button lives in the action row below,
+   aligned with Clear All/Generate/Pause/Stop, as a fallback once the
+   box is full of thumbnails and clicking it just browses those. The
+   box has a fixed height sized to exactly fit the 10x3 import grid, so
+   it never expands/collapses as images come and go; if the rest of
+   the page's content pushes past the viewport, the page itself
+   scrolls (.content already does). */
+.dropzone {
+  display: flex;
+  border: 2px dashed var(--border);
+  border-radius: 12px;
+  color: var(--text-dim);
+  transition: border-color 180ms var(--ease), background-color 180ms var(--ease), transform 180ms var(--ease);
+  margin-bottom: 20px;
+  height: 258px;
+  overflow: hidden;
+}
+
+.dropzone.clickable { cursor: pointer; }
+.dropzone.clickable:hover {
+  border-color: var(--accent);
+  background: rgba(91, 140, 255, 0.05);
+}
+
+.dropzone.drag-active {
+  border-color: var(--accent);
+  background: rgba(91, 140, 255, 0.08);
+  transform: scale(1.004);
+}
+
+.dropzone.drop-success { animation: dropSuccessPulse 420ms var(--ease); }
+@keyframes dropSuccessPulse {
+  0%   { border-color: var(--accent); background: rgba(76,175,125,0.10); }
+  60%  { border-color: #4caf7d; background: rgba(76,175,125,0.14); }
+  100% { border-color: var(--border); background: transparent; }
+}
+
+.dropzone-media {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+.dropzone-media p {
+  margin: 0;
+  text-align: center;
+  max-width: 420px;
+}
+
+.import-grid {
+  display: grid;
+  grid-template-columns: repeat(10, 1fr);
+  grid-template-rows: repeat(3, 1fr);
+  gap: 6px;
+  width: 100%;
+  height: 100%;
+}
+/* Real bug this fixes: an element's OWN "display: grid/flex/etc" rule
+   in an author stylesheet always wins over the browser's built-in
+   "[hidden] { display: none }" rule, regardless of selector order or
+   specificity, because author styles simply outrank user-agent styles
+   -- same root cause already documented below for `.page[hidden]`.
+   Without this, clicking Clear All correctly emptied importedPaths
+   and set importGrid.hidden = true, but the grid never actually
+   disappeared: it stayed laid out at `display:grid`, sharing the flex
+   row with the now-visible instructional text and getting squeezed
+   into a thin, tall sliver on the right (the "images compressing on
+   the right in a portrait crop" symptom).
+
+   v0.8.7: this rule only ever targeted #importGrid (Meta Generator's
+   own grid) -- the Image to Prompt Generator page has the exact same
+   markup pattern under a different id (#importGridPrompt) and never
+   got this fix, reproducing the identical bug there (Clear All looked
+   like it didn't work; dropzone text stuck on the left instead of
+   centering). Written as a class selector on .import-grid instead of
+   per-id so any current or future dropzone using this pattern is
+   covered automatically. */
+.import-grid[hidden] { display: none !important; }
+.import-cell {
+  background: var(--bg1); border-radius: 6px; overflow: hidden;
+  display: flex; align-items: center; justify-content: center;
+}
+.import-cell img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.import-cell-more { font-size: 12px; font-weight: 700; color: var(--accent); background: rgba(91,140,255,0.12); }
+
+.panel {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px;
+}
+
+.btn {
+  background: var(--bg1);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 9px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  cursor: pointer;
+  margin: 0 8px 8px 0;
+  transition: transform 110ms var(--ease), background-color 150ms var(--ease),
+    border-color 150ms var(--ease), box-shadow 150ms var(--ease);
+}
+
+.btn:hover { background: #2a2d35; border-color: #3a3f4a; }
+.btn:active { transform: scale(0.97); transition-duration: 80ms; }
+
+.btn-primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn-primary:hover { background: #4a7bef; box-shadow: 0 2px 10px rgba(91, 140, 255, 0.28); }
+
+.output {
+  background: var(--bg1);
+  border-radius: 8px;
+  padding: 12px;
+  font-size: 12px;
+  color: var(--text-dim);
+  min-height: 40px;
+  white-space: pre-wrap;
+}
+
+.progress-wrap {
+  height: 8px;
+  background: var(--bg1);
+  border-radius: 4px;
+  overflow: hidden;
+  margin-top: 12px;
+}
+
+.progress-bar {
+  height: 100%;
+  width: 0%;
+  background: var(--accent);
+  transition: width 260ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+/* v0.9.3: the progress count ("[3/40] file.jpg") and the current
+   API/model indicator used to share one element and stomp on each
+   other -- whichever event fired last won, so the model text
+   routinely blocked the progress status mid-batch. Now a flex row
+   with the progress text pinned left and the model text pinned right,
+   so both are always visible at once on the same line. */
+.status-row { margin-top: 8px; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.status-row-left { display: flex; align-items: center; gap: 14px; min-width: 0; flex: 1; flex-wrap: wrap; }
+.status-text { font-size: 13px; color: var(--text-dim); transition: opacity 150ms var(--ease); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.status-text.text-updating { animation: textFadeSwap 220ms var(--ease); }
+.status-model-text { font-size: 12px; color: var(--text-dim); flex-shrink: 0; white-space: nowrap; opacity: 0.85; }
+@keyframes textFadeSwap {
+  0%   { opacity: 0.15; transform: translateY(2px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+.controls-panel { margin-bottom: 20px; }
+.controls-row { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; margin-bottom: 10px; }
+.controls-row label { font-size: 12px; color: var(--text-dim); display: flex; align-items: center; gap: 6px; }
+.controls-row label.chk { flex-direction: row; }
+.num { width: 56px; background: var(--bg1); border: 1px solid var(--border); color: var(--text); border-radius: 6px; padding: 4px 6px; }
+.btn[disabled] { opacity: 0.4; cursor: not-allowed; }
+
+/* Always exactly 3 columns -- fixed width per card, driven purely by
+   however much room .meta-content has (which is why collapsing the
+   left control panel makes these visibly wider: same 3 columns, more
+   space to divide between them). Cards don't reflow to more/fewer
+   columns as the batch grows, and don't resize once rendered. */
+.card-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+  contain: layout style; /* Part 23: containment on the grid container itself,
+                              on top of each card's own content-visibility */
+  transition: opacity 180ms var(--ease); /* v0.9.3: soft fade when the column count changes, see .view-select above */
+}
+/* v0.9.3: 2/3/4-column view, switched via the View dropdown -- default
+   (no data-cols) stays 3, matching the app's original fixed layout. */
+.card-grid[data-cols="2"] { grid-template-columns: repeat(2, 1fr); }
+.card-grid[data-cols="3"] { grid-template-columns: repeat(3, 1fr); }
+.card-grid[data-cols="4"] { grid-template-columns: repeat(4, 1fr); }
+.card-grid.view-fading { opacity: 0; }
+
+.empty-state { color: var(--text-dim); font-size: 13px; padding: 30px 0; text-align: center; display: none; }
+.empty-state.visible { display: block; }
+
+.card {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px;
+  display: flex;
+  gap: 10px;
+  position: relative;
+  min-width: 0; /* v0.9.3 fix: a grid item's default "auto" min-width lets its
+     own intrinsic content size (title/keyword text that can't shrink below
+     its min-content width) win over the track width -- so as columns go
+     from 2 -> 3 -> 4 and each track gets narrower, .card (a flex container
+     itself) was forcing its OWN track wider than the 1fr share to fit that
+     content, which blew the whole row past .card-grid's right edge. That's
+     the exact bug: cards not shrinking on repeated column-count changes,
+     the grid visibly overflowing its border, worst at 4 columns. .card-body
+     already sets min-width:0 for its own flex children, but that doesn't
+     stop .card itself (the grid item) from reporting an inflated min size
+     to the grid -- needs setting here too so the grid can freely shrink it.
+     content that can't fit still wraps via .field-text's word-break instead
+     of forcing the layout wider. */
+  min-height: 210px; /* v0.9.3: bumped alongside the bigger thumbnail + new file-info lines below it */
+  transition: border-color 150ms var(--ease), box-shadow 150ms var(--ease);
+  /* v0.9.x (Part 11): large-batch DOM performance. content-visibility:auto
+     tells the browser to skip layout/style/paint work entirely for cards
+     that are off-screen -- exactly the win a 500-1000 image batch needs,
+     with none of virtualization's scroll/editing-state risk, since every
+     card stays a real DOM node the whole time (Part 11 explicitly asks to
+     try low-risk options before virtualization). contain-intrinsic-size
+     gives the browser a placeholder size to reserve for off-screen cards
+     so scrolling doesn't jump once they're skipped -- matches this card's
+     own min-height, so the reserved space is accurate even before content
+     streams in. Both properties are pure progressive enhancement: browsers
+     that don't understand content-visibility ignore it and render every
+     card normally (Part 28's Windows/WebView2 + Linux/WebKitGTK
+     compatibility requirement is satisfied by that silent no-op fallback,
+     not by any extra branching code). */
+  content-visibility: auto;
+  contain-intrinsic-size: 210px;
+}
+.card:hover { border-color: var(--border); box-shadow: 0 2px 10px rgba(0,0,0,0.18); }
+.card.has-desc { min-height: 266px; content-visibility: auto; contain-intrinsic-size: 266px; } /* a bit taller only when Description is on */
+
+/* v0.8.9: thumbnail + its own Regenerate/Delete row now share a
+   column so those two actions sit directly under the image, inside
+   every metadata/prompt card -- previously there was nowhere in the
+   card markup for per-card regenerate/delete controls at all.
+   v0.8.9.2: the two buttons were sitting side-by-side under the
+   thumbnail (half-width each); now stacked into the SAME column as
+   the thumbnail -- thumb, then Regenerate, then Delete, each exactly
+   as wide as the thumbnail (72px) -- so the whole thumb-col reads as
+   one clean vertical stack instead of a square photo over a stubby
+   two-button row. */
+.card-thumb-col { display: flex; flex-direction: column; gap: 6px; flex-shrink: 0; align-items: center; }
+.card-thumb { width: 96px; height: 96px; flex-shrink: 0; border-radius: 6px; overflow: hidden; background: var(--bg1); } /* v0.9.3: 72px -> 96px, "a bit bigger" per request */
+.card-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.thumb-placeholder { width: 100%; height: 100%; background: var(--bg1); }
+/* v0.9.3: file name / original dimensions / on-disk size, shown
+   between the (now-bigger) thumbnail and the Regenerate/Delete
+   buttons -- same 96px column width as the thumbnail so the whole
+   thumb-col still reads as one clean vertical stack. Name is
+   single-line + ellipsis (title attr carries the full path/name for
+   hover); dims/size are populated from the *original* file, never the
+   thumbnail, via file_meta_ready (see app.js/session.py). */
+.card-file-info { width: 96px; text-align: center; line-height: 1.3; }
+.card-file-name { font-size: 10px; color: var(--text); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.card-file-dims, .card-file-size { font-size: 9.5px; color: var(--text-dim); }
+.card-thumb-actions { display: flex; flex-direction: column; gap: 4px; width: 96px; }
+.card-thumb-actions .icon-btn {
+  width: 100%; height: 24px; padding: 0; display: flex; align-items: center; justify-content: center;
+  border: 1px solid var(--border); border-radius: 6px;
+  transition: background-color 180ms var(--ease), color 180ms var(--ease), border-color 180ms var(--ease);
+}
+/* Regenerate: normal state is the plain button it always was, just
+   with the icon itself tinted accent-color instead of the default
+   dim gray -- so it reads as "the accent action" even at rest.
+   Hover fades the whole button to a solid accent fill with a white
+   icon (same fade timing/curve as Delete below, just the other
+   color), rather than snapping straight to the filled state. */
+.card-regen-btn { background: var(--bg1); color: var(--accent); }
+.card-regen-btn:hover { background: var(--accent); border-color: var(--accent); color: #fff; }
+/* Delete: normal state is a solid black button with a red icon --
+   deliberately fixed black (not a theme var) so it reads the same in
+   both dark and light mode. Hover fades to a solid red fill with a
+   white icon, mirroring Regenerate's fade-to-fill treatment. */
+.card-delete-btn { background: #000; border-color: #000; color: #e5686b; }
+.card-delete-btn:hover { background: #e5686b; border-color: #e5686b; color: #fff; }
+.card-regen-btn.spinning svg { animation: spin 700ms linear infinite; }
+@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
+.card-body { flex: 1; min-width: 0; padding-bottom: 22px; }
+.card-status { font-size: 11px; font-weight: 600; margin-bottom: 4px; }
+.card-status.done { color: #57d38c; }
+.card-status.failed { color: #e5686b; }
+.card-status.working { color: #e0b34f; }
+
+.card-field { margin-bottom: 6px; }
+.field-label-row { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+.field-label { font-size: 10px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.03em; }
+/* v0.8.9: was 9px/text-dim/opacity 0.8 -- barely legible next to the
+   field label. Switched to the accent color so the generated
+   char/word counts stand out from the label row.
+   v0.8.9.2: font-size matched to .field-text (12px) -- it had been
+   left at 11.5px, a hair larger than every other piece of text in the
+   card, which read as inconsistent/sloppy next to the uniform sizing
+   everywhere else in the card. */
+.field-count { font-size: 12px; color: var(--accent); font-weight: 600; text-transform: none; letter-spacing: 0; opacity: 1; margin-left: 5px; }
+.field-actions { display: flex; gap: 2px; flex-shrink: 0; }
+.field-copy-btn, .field-paste-btn {
+  padding: 4px 6px; font-size: 10px; line-height: 1;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.field-copy-btn svg, .field-paste-btn svg { display: block; }
+
+/* Editable state -- toggled per-card by its own pencil button only
+   (see app.js: `.editing` is added/removed on a single .card, never
+   on cardGrid as a whole). */
+.card.editing .field-text { cursor: text; }
+.field-text[contenteditable="true"] {
+  outline: 1px dashed var(--accent);
+  outline-offset: 2px;
+  border-radius: 3px;
+  background: rgba(91, 140, 255, 0.06);
+}
+
+.card-edit-btn {
+  position: absolute; right: 8px; bottom: 8px;
+  width: 24px; height: 24px; border-radius: 6px;
+  border: 1px solid var(--border); background: var(--bg1); color: var(--text-dim);
+  cursor: pointer; font-size: 12px; display: flex; align-items: center; justify-content: center;
+}
+.card-edit-btn:hover { background: var(--bg2); color: var(--text); }
+.card.editing .card-edit-btn { background: var(--accent); border-color: var(--accent); color: #fff; }
+.field-text { font-size: 12px; line-height: 1.35; word-break: break-word; }
+.card-model { font-size: 10px; color: var(--text-dim); margin-top: 4px; }
+
+.card.updated-flash { animation: flashUpdate 220ms var(--ease); }
+@keyframes flashUpdate {
+  from { background: rgba(91,140,255,0.12); }
+  to   { background: var(--bg2); }
+}
+
+.status-pill { font-size: 12px; color: var(--text-dim); }
+.sel { background: var(--bg1); border: 1px solid var(--border); color: var(--text); border-radius: 6px; padding: 4px 6px; font-size: 12px; }
+.panel-title { margin: 0 0 14px; font-size: 15px; }
+
+/* ---- Embed page (v0.8.4): rebuilt to match the original CTk app's
+   exact fields/positions (Hasib's explicit request) -- numbered Load
+   CSV / File Location steps, a 2x2 metadata-column mapping grid,
+   4 toggles (Match Filename Only / Include Sub-Folders / Remove
+   Program Name / Replace Filename), Start Embedding, then a fixed
+   Activity Log column on the right. Concurrency slider and Preview
+   Match (both real, both present in the previous JS-only build) were
+   removed from this page's UI to match the original exactly, per
+   Hasib's "no exception" instruction -- concurrency now runs at a
+   fixed default in the backend instead of being user-exposed here. ---- */
+.embed-page { display: grid; grid-template-columns: 1fr 340px; gap: 14px; height: calc(var(--app-100vh, 100vh) - 52px - 28px); align-items: stretch; }
+.embed-panel-col { min-height: 0; overflow-y: auto; }
+.embed-panel { padding: 20px; }
+.embed-step + .embed-step { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border); }
+.embed-step-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.embed-step-label { display: flex; align-items: center; gap: 10px; font-size: 14px; font-weight: 600; }
+.step-num {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 22px; height: 22px; border-radius: 50%; background: var(--accent);
+  color: #fff; font-size: 11px; font-weight: 700; flex-shrink: 0;
+}
+.step-status { font-size: 12px; color: var(--text-dim); margin-top: 6px; margin-left: 32px; }
+
+/* v0.8.7: CSV/folder become real drop targets, not just Browse-only
+   steps -- transition/border echo .dropzone's drag-active treatment so
+   the affordance reads consistently with the rest of the app. */
+.embed-dropzone { border-radius: 10px; padding: 8px; margin: -8px; transition: background-color 180ms var(--ease), outline-color 180ms var(--ease), transform 180ms var(--ease); outline: 2px dashed transparent; }
+.embed-dropzone.drag-active { outline-color: var(--accent); background: rgba(91, 140, 255, 0.06); transform: scale(1.004); }
+.embed-dropzone.drop-success { animation: dropSuccessPulse 420ms var(--ease); }
+.match-count-status { color: var(--accent); font-weight: 600; }
+.embed-map-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 14px; margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--border); }
+.embed-toggle-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 20px; margin-top: 6px; padding-top: 10px; border-top: 1px solid var(--border); }
+.embed-start-row { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--border); }
+.embed-start-btn { width: 100%; margin: 0; padding: 12px; font-size: 14px; font-weight: 600; }
+.embed-log-panel { min-height: 0; display: flex; flex-direction: column; }
+.embed-log-head { flex-shrink: 0; display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+.embed-log-head .panel-title { margin: 0; }
+.embed-log {
+  flex: 1; min-height: 0; overflow-y: auto; margin-top: 0;
+  background: var(--bg1); border: 1px solid var(--border);
+  contain: layout style; /* Part 23: this now receives buffered, rAF-flushed
+                             text-node appends (see embed.js) -- containment
+                             keeps each flush's layout work scoped to this
+                             box instead of the whole page. */
+}
+
+.provider-block { border-bottom: 1px solid var(--border); padding: 14px 0; }
+.provider-block:last-child { border-bottom: none; }
+.provider-head { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.provider-name { font-weight: 600; font-size: 14px; }
+.provider-active-count { font-size: 11px; color: var(--text-dim); background: var(--bg1); border-radius: 10px; padding: 2px 8px; }
+.provider-key-link { font-size: 11px; color: var(--accent); text-decoration: none; margin-left: auto; }
+.provider-key-link:hover { text-decoration: underline; }
+.provider-keys { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
+.key-row { display: flex; align-items: center; gap: 10px; font-size: 12px; color: var(--text-dim); }
+.key-masked { font-family: monospace; }
+.key-input { flex: 1; background: var(--bg1); border: 1px solid var(--border); color: var(--text); border-radius: 6px; padding: 8px 10px; font-size: 12px; }
+
+/* ---- Global chrome: top bar ---- */
+.topbar {
+  height: 52px;
+  background: var(--nav-bg);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 18px;
+  flex-shrink: 0;
+}
+.topbar-left { display: flex; align-items: center; gap: 10px; }
+.brand-mark {
+  width: 30px; height: 30px; border-radius: 8px;
+  display: block; object-fit: cover;
+  flex-shrink: 0;
+}
+.brand-name { font-weight: 600; font-size: 15px; }
+.version-pill { background: var(--bg2); border: 1px solid var(--border); border-radius: 10px; padding: 2px 9px; font-size: 11px; color: var(--accent); }
+.topbar-right { display: flex; align-items: center; gap: 14px; }
+/* .btn's default margin (0 8px 8px 0 -- bottom-only) is fine inside a
+   wrapping button row, but inside the topbar's single-row flex it
+   makes align-items:center center the button's margin BOX, which is
+   8px taller on the bottom than the top -- so the button itself sits
+   a few pixels above dead-center, reading as "stuck to the ceiling".
+   Zero it out here; the row's own `gap: 14px` already spaces things. */
+.topbar-right .btn { margin: 0; }
+.btn-danger { background: #b33; border-color: #b33; color: #fff; }
+.btn-danger:hover { background: #c44; }
+.online-pill { font-size: 12px; color: var(--text-dim); display: flex; align-items: center; gap: 6px; }
+.online-dot { width: 7px; height: 7px; border-radius: 50%; background: #4caf7d; display: inline-block; }
+.topbar-copyright { font-size: 10px; color: var(--text-dim); text-align: right; line-height: 1.4; }
+
+
+/* ---- Sidebar: icon + label stacked, matches original's compact rail ----
+   v0.8.4: icons/labels sized up ~50% on Hasib's request (18px->27px
+   icon, 10px->15px label) -- sidebar width and padding bumped to match
+   so the bigger glyphs don't clip or crowd.
+   v0.8.6: Hasib reported the nav icons looked deformed/oversized and
+   the sidebar rail too wide at that size -- icon 26px->20px, sidebar
+   88px->72px (see .sidebar above), nav-item padding tightened to
+   match so nothing looks lost in the narrower rail. */
+.sidebar .nav-item { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 11px 2px; width: 100%; }
+.sidebar .nav-item span { font-size: 12px; color: inherit; }
+/* v0.8.5: emoji glyphs replaced with modern single-colored line-icon
+   SVGs (Hasib's request) -- currentColor means they inherit the same
+   .nav-item / .nav-item.active color rules the old emoji text did, so
+   hover/active states still work with zero extra CSS. */
+.nav-icon { width: 20px; height: 20px; flex-shrink: 0; }
+
+/* ---- Dashboard-specific ---- */
+.page-title { font-size: 24px; font-weight: 700; margin: 0 0 2px; }
+.page-subtitle { color: var(--text-dim); font-size: 13px; margin: 0 0 18px; }
+.section-label { font-size: 13px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.04em; margin: 0 0 10px; }
+.stat-icon { font-size: 18px; margin-bottom: 4px; }
+.stat-card { background: var(--bg2); border: 1px solid var(--border); border-radius: 10px; padding: 14px; }
+.stat-value { font-size: 22px; font-weight: 600; }
+.stat-label { font-size: 11px; color: var(--text-dim); margin-top: 4px; }
+.dash-row-2 { grid-template-columns: 1fr 1fr; }
+.dash-row-3 { grid-template-columns: 1fr 1fr 1fr; }
+.dash-row { display: grid; gap: 12px; margin: 16px 0; }
+.quick-btn {
+  border: none; border-radius: 10px; padding: 16px; font-size: 14px; font-weight: 600; color: #fff;
+  cursor: pointer; transition: transform 100ms var(--ease), filter 150ms var(--ease);
+}
+.quick-btn { transition: filter 150ms var(--ease), transform 110ms var(--ease); }
+.quick-btn:hover { filter: brightness(1.1); transform: translateY(-1px); }
+.quick-btn:active { transform: scale(0.98); }
+.quick-blue { background: #3b6fe0; }
+.quick-teal { background: #17a589; }
+.quick-orange { background: #d97b1f; }
+.quick-purple { background: #7d4fd9; }
+.chart-legend { display: flex; gap: 16px; margin-bottom: 8px; flex-wrap: wrap; }
+.legend-item { font-size: 11px; color: var(--text-dim); display: flex; align-items: center; gap: 5px; }
+.legend-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+
+/* ---- Appearance page ---- */
+.theme-mode-row { display: flex; gap: 10px; }
+.theme-mode-btn {
+  flex: 1; background: var(--bg1); border: 1px solid var(--border); color: var(--text);
+  border-radius: 10px; padding: 14px; font-size: 14px; font-weight: 600; cursor: pointer;
+  transition: border-color 150ms var(--ease), background-color 150ms var(--ease);
+}
+.theme-mode-btn { transition: background-color 150ms var(--ease), border-color 150ms var(--ease), color 150ms var(--ease), transform 110ms var(--ease); }
+.theme-mode-btn:hover { background: var(--bg2); }
+.theme-mode-btn:active { transform: scale(0.97); }
+.theme-mode-btn.active { border-color: var(--accent); background: rgba(91,140,255,0.1); color: var(--accent); }
+.hint-text { font-size: 12px; color: var(--text-dim); margin: 4px 0 10px; }
+.swatch-row { display: flex; gap: 10px; margin-bottom: 10px; }
+.swatch { width: 30px; height: 30px; border-radius: 50%; border: 2px solid var(--border); cursor: pointer; padding: 0; transition: border-color 150ms var(--ease), transform 110ms var(--ease); }
+.swatch:hover { border-color: var(--accent); transform: scale(1.08); }
+.swatch:active { transform: scale(0.94); }
+.hex-label { font-size: 12px; color: var(--text-dim); display: flex; align-items: center; gap: 8px; }
+.hex-input { background: var(--bg1); border: 1px solid var(--border); color: var(--text); border-radius: 6px; padding: 6px 8px; font-size: 12px; width: 100px; }
+
+/* ---- Meta Generator control panel (left sidebar layout) ---- */
+/* [hidden] must always win regardless of any other display rule below
+   -- the actual bug that caused Meta Generator to stay stacked on top
+   of every other page: .meta-page's display:flex had equal CSS
+   specificity to the browser's own [hidden]{display:none} rule and
+   loaded later, so it silently overrode it. This rule fixes it for
+   every page, not just meta, since any future per-page display
+   override would hit the same bug otherwise. */
+.page[hidden] { display: none !important; }
+
+.popup-mode .topbar, .popup-mode .sidebar { display: none !important; }
+.popup-mode .content { padding: 14px; }
+.popup-mode .api-layout { grid-template-columns: 1fr; }
+
+.meta-page { display: flex; gap: 16px; align-items: flex-start; }
+/* The panel gets a fixed, viewport-relative height (sticky within the
+   scrolling .content area) instead of an intrinsic content height.
+   That's the actual fix for the collapse button "moving up and down":
+   previously .panel-collapse-btn's `top: 50%` was relative to the
+   panel's own height, which changed every time panel content changed
+   (Advanced Options open/close, prefix/suffix fields appearing) --
+   so 50% kept landing at a different pixel. With a constant height
+   here, 50% is always the same spot, and any content taller than the
+   box scrolls inside .control-panel-inner instead of growing the box. */
+.control-panel {
+  width: 270px; flex-shrink: 0; background: var(--bg2); border: 1px solid var(--border);
+  border-radius: 10px; padding: 14px; position: sticky; top: 14px;
+  height: calc(var(--app-100vh, 100vh) - 52px - 28px - 14px);
+  display: flex; flex-direction: column;
+  transition: width 200ms var(--ease), padding 200ms var(--ease), opacity 150ms var(--ease);
+}
+.control-panel.collapsed { width: 0; padding: 14px 0; border-color: transparent; background: transparent; overflow: visible; }
+.control-panel.collapsed .control-panel-inner { opacity: 0; pointer-events: none; }
+.control-panel-inner { transition: opacity 150ms var(--ease); overflow-y: auto; overflow-x: hidden; flex: 1; padding-right: 4px; min-height: 0; }
+/* v0.9.3: replaced the pill-shaped button (24x56, filled ▶/◀ triangle
+   glyphs) with a true circle (equal width/height, border-radius 50%).
+   Same anchor point (right edge of panel, vertically centered) so no
+   layout knock-on effects elsewhere.
+   v0.9.3.1: the plain "<"/">" text characters looked dated (mismatched
+   weight vs. the rest of the icon set, no antialiasing control) --
+   swapped for the same stroked-chevron SVG used elsewhere in the app.
+   Direction is now a CSS rotation on one icon instead of swapping
+   glyphs/markup, so it can animate smoothly between states. */
+/* v0.9.5.1: still read as "backdated" even as a thin flat-outline
+   circle -- given real visual weight this time instead of another
+   marginal tweak: a touch bigger, a soft floating shadow instead of a
+   flat border, a bolder chevron stroke, and a small hover lift +
+   press-down feedback so it reads as an actual interactive control,
+   not a static glyph. */
+.panel-collapse-btn {
+  position: absolute; top: 50%; right: -15px; transform: translateY(-50%);
+  width: 30px; height: 30px; border-radius: 50%; border: 1px solid var(--border);
+  background: var(--bg2); color: var(--text-dim); cursor: pointer;
+  display: flex; align-items: center; justify-content: center; z-index: 5;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.22), 0 0 0 1px rgba(255,255,255,0.02) inset;
+  transition: background-color 150ms var(--ease), color 150ms var(--ease),
+              border-color 150ms var(--ease), box-shadow 150ms var(--ease),
+              transform 150ms var(--ease);
+}
+.panel-collapse-btn:hover {
+  background: var(--bg1); color: var(--accent); border-color: var(--accent);
+  box-shadow: 0 4px 14px rgba(0,0,0,0.3), 0 0 0 3px rgba(91,140,255,0.12);
+  transform: translateY(calc(-50% - 1px));
+}
+.panel-collapse-btn:active { transform: translateY(-50%) scale(0.92); }
+.panel-collapse-icon { transition: transform 200ms var(--ease); display: block; }
+.panel-collapse-btn.collapsed .panel-collapse-icon { transform: rotate(180deg); }
+.meta-content { flex: 1; min-width: 0; }
+
+/* v0.9.0: click-and-drag scroll zones (see js/dragscroll.js) --
+   "grab" cursor at rest, "grabbing" once an actual drag has started
+   (a plain click that never moves past the drag threshold never gets
+   this class, so ordinary clicks look completely normal). Real
+   controls inside a zone (buttons, inputs, links, etc.) already set
+   their own cursor explicitly, so this doesn't affect them. */
+.drag-scroll-zone { cursor: grab; }
+.drag-scroll-zone.dragging { cursor: grabbing; user-select: none; }
+.control-label { font-size: 10px; font-weight: 700; color: var(--text-dim); letter-spacing: 0.05em; margin-bottom: 8px; }
+/* v0.8.4: the 3 numbers (Active/Stored/Providers) had no header, so
+   they read as unexplained figures -- this label sits directly above
+   the box they describe. */
+.key-summary-header {
+  font-size: 10px; font-weight: 700; color: var(--text-dim); letter-spacing: 0.05em;
+  margin-bottom: 6px;
+}
+/* v0.9.5.1: whole API-info box acts as a button to jump to the API
+   Manager page, while still showing the live key info -- the "Check"
+   button inside stays its own separate action (stops propagation so
+   clicking it doesn't also navigate away). */
+.key-summary-header-row, .key-summary { cursor: pointer; }
+.key-summary-header-row:hover .key-summary-label, .key-summary:hover { color: var(--text); }
+.key-summary:hover { border-color: var(--accent); background: var(--bg2); }
+.key-check-link { cursor: pointer; }
+.key-summary {
+  display: flex; justify-content: space-between; gap: 6px;
+  font-size: 11px; color: var(--text-dim); margin-bottom: 14px;
+  background: var(--bg1); border: 1px solid var(--border); border-radius: 8px;
+  padding: 9px 10px;
+  transition: border-color 120ms var(--ease), background-color 120ms var(--ease);
+}
+.key-summary strong { display: block; color: var(--accent); font-size: 14px; font-weight: 700; }
+.key-summary-item { flex: 1; text-align: center; }
+.control-slider-row { display: flex; justify-content: space-between; font-size: 12px; color: var(--text-dim); margin: 10px 0 4px; }
+.control-val { color: var(--accent); font-weight: 600; }
+.range-input { width: 100%; accent-color: var(--accent); }
+.control-field-label { display: block; font-size: 11px; color: var(--text-dim); margin: 10px 0 4px; }
+.sel-full { width: 100%; background: var(--bg1); border: 1px solid var(--border); color: var(--accent); font-weight: 600; border-radius: 8px; padding: 8px; font-size: 12px; }
+.control-toggle-row { display: flex; justify-content: space-between; align-items: center; font-size: 12px; margin: 10px 0; }
+.control-toggle-row.control-disabled { opacity: 0.4; }
+.switch { position: relative; display: inline-block; width: 40px; height: 22px; }
+.switch input { opacity: 0; width: 0; height: 0; }
+.switch-track { position: absolute; inset: 0; background: var(--border); border-radius: 22px; cursor: pointer; transition: background-color 150ms var(--ease); }
+.switch-track::before { content: ""; position: absolute; width: 16px; height: 16px; left: 3px; top: 3px; background: #fff; border-radius: 50%; transition: transform 150ms var(--ease); }
+.switch input:checked + .switch-track { background: var(--accent); }
+.switch input:checked + .switch-track::before { transform: translateX(18px); }
+.link-btn { background: none; border: none; color: var(--accent); font-size: 11px; cursor: pointer; padding: 4px 0; margin-bottom: 8px; }
+.adv-toggle-btn {
+  width: 100%; background: var(--bg1); border: 1px solid var(--border); color: var(--text-dim);
+  border-radius: 8px; padding: 9px; font-size: 12px; font-weight: 600; text-align: left; cursor: pointer; margin-top: 6px;
+}
+.advanced-body {
+  max-height: 0; opacity: 0; overflow: hidden; pointer-events: none;
+  transform: translateY(-4px);
+  margin-top: 0; padding-top: 0;
+  transition: max-height 220ms var(--ease), opacity 180ms var(--ease),
+    transform 180ms var(--ease), margin-top 220ms var(--ease), padding-top 220ms var(--ease);
+}
+.advanced-body.open {
+  max-height: 600px; opacity: 1; pointer-events: auto;
+  transform: translateY(0);
+  margin-top: 8px; padding-top: 4px;
+}
+.text-input { width: 100%; background: var(--bg1); border: 1px solid var(--border); color: var(--text); border-radius: 6px; padding: 7px 9px; font-size: 12px; margin-bottom: 4px; }
+/* v0.8.4: Browse moved to the far right, separated from the
+   Clear/Generate/Pause/Stop group -- justify-content:space-between
+   plus its own margin keeps a real gap between the two clusters even
+   when the row wraps on a narrow window. */
+.meta-action-row { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
+.meta-action-group { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+
+/* v0.8.6: "Check" link moved from the bottom action row up next to
+   the "🔑 API INFO" label -- same get_active_keys_summary() logic,
+   just relocated per Hasib's request. Sits inline with the label via
+   flex + a small margin-left, no layout change to key-summary-header
+   itself beyond becoming a flex row. */
+.key-summary-header-row { display: flex; align-items: center; gap: 8px; }
+.key-check-link { margin: 0; padding: 0; font-size: 10px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; }
+
+/* v0.8.8: Auto Download CSV toggle is now a real bordered button --
+   same box (background/border/radius/padding/height) as Clear All /
+   Generate / Pause / Stop / Download CSV, so it sits perfectly
+   aligned with them on the right side of the action row instead of
+   being a plain, shorter, unbordered label+switch pair. The whole
+   box is clickable (see app.js), not just the tiny switch inside it. */
+.btn-toggle {
+  display: inline-flex; align-items: center; gap: 8px;
+  cursor: pointer; user-select: none;
+}
+.btn-toggle .switch { flex-shrink: 0; }
+.meta-auto-csv-toggle { font-size: 13px; }
+.meta-action-browse { margin-left: auto; }
+.grid-header { margin: 16px 0 10px; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+
+/* v0.9.3: View dropdown (2/3/4-column card grid selector), sitting to
+   the right of "Generated Metadata" and just under the Browse button. */
+.view-select { position: relative; }
+.view-select-btn {
+  display: flex; align-items: center; gap: 6px;
+  background: var(--bg1); border: 1px solid var(--border); color: var(--text-dim);
+  border-radius: 8px; padding: 6px 12px; font-size: 12px; cursor: pointer;
+  transition: background-color 150ms var(--ease), color 150ms var(--ease), border-color 150ms var(--ease);
+}
+.view-select-btn:hover { background: var(--bg2); color: var(--text); border-color: var(--accent); }
+.view-select.open .view-select-btn { color: var(--text); border-color: var(--accent); }
+.view-select-menu {
+  position: absolute; top: calc(100% + 6px); right: 0; z-index: 20;
+  display: flex; gap: 6px; padding: 8px;
+  background: var(--bg2); border: 1px solid var(--border); border-radius: 10px;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.28);
+  opacity: 0; transform: translateY(-4px) scale(0.98); pointer-events: none;
+  transition: opacity 150ms var(--ease), transform 150ms var(--ease);
+}
+.view-select.open .view-select-menu { opacity: 1; transform: translateY(0) scale(1); pointer-events: auto; }
+.view-select-option {
+  width: 34px; height: 30px; border-radius: 6px; border: 1px solid var(--border);
+  background: var(--bg1); color: var(--text-dim); font-size: 13px; font-weight: 600; cursor: pointer;
+  transition: background-color 150ms var(--ease), color 150ms var(--ease), border-color 150ms var(--ease);
+}
+.view-select-option:hover { border-color: var(--accent); color: var(--text); }
+.view-select-option.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+/* ---- API Manager ---- */
+/* v0.9.5: wraps the provider tabs + the new Models gear button on one
+   row, gear pinned to the far right (aligned with the tabs, per the
+   request). */
+.api-tabs-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
+.api-tabs { display: flex; gap: 8px; }
+.model-settings-btn {
+  display: flex; align-items: center; gap: 6px; width: auto; height: auto;
+  padding: 7px 12px; border-radius: 8px; background: var(--bg1); border: 1px solid var(--border);
+  color: var(--text-dim); font-size: 12px; flex-shrink: 0;
+}
+.model-settings-btn:hover { color: var(--text); border-color: var(--accent); }
+
+/* Model enable/disable panel -- reuses .confirm-backdrop/.confirm-dialog
+   (see confirm.js) for the overlay + card chrome, with its own wider
+   dialog size and per-provider sections since the content here is
+   richer than a plain title/message/two-button confirm. */
+.model-settings-dialog { width: 460px; max-width: calc(100vw - 40px); max-height: 80vh; display: flex; flex-direction: column; }
+.model-settings-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
+.model-settings-body { overflow-y: auto; display: flex; flex-direction: column; gap: 16px; }
+.model-settings-provider-name { font-size: 12px; font-weight: 700; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.03em; margin-bottom: 8px; }
+.model-settings-list { display: flex; flex-direction: column; gap: 2px; }
+.model-settings-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 7px 4px; border-radius: 6px; cursor: pointer; }
+.model-settings-row:hover { background: var(--bg1); }
+.model-settings-label { font-size: 13px; color: var(--text); }
+.api-tab {
+  background: var(--bg2); border: 1px solid var(--border); color: var(--text-dim);
+  border-radius: 8px; padding: 9px 16px; font-size: 13px; font-weight: 600; cursor: pointer;
+  transition: background-color 150ms var(--ease), color 150ms var(--ease), border-color 150ms var(--ease), transform 110ms var(--ease);
+}
+.api-tab:active { transform: scale(0.97); }
+.api-tab.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+.api-tab-count { font-size: 10px; opacity: 0.8; }
+.api-layout { display: grid; grid-template-columns: 340px 1fr; gap: 16px; align-items: start; }
+.api-config-panel, .api-keys-panel { padding: 18px; }
+.api-apply-btn {
+  width: 100%; background: var(--accent); color: #fff; border: none; border-radius: 8px;
+  padding: 10px; font-size: 12px; font-weight: 600; cursor: pointer; margin-top: 8px;
+}
+.api-add-row { display: flex; gap: 8px; margin: 8px 0; }
+.api-getkey-btn {
+  width: 100%; background: var(--bg1); border: 1px solid var(--border); color: var(--text-dim);
+  border-radius: 8px; padding: 9px; font-size: 12px; cursor: pointer; margin-top: 10px;
+}
+.api-bulk-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 14px; }
+/* v0.9.3: was flex-direction:column, so every key card stacked full-
+   width one per row -- on a wide/maximized window the STORED KEYS
+   panel measured as full-width already (confirmed with a real
+   Chromium render), but each card's actual content is narrow, so most
+   of that width just sat empty behind a single-column list. Switched
+   to a responsive multi-column grid (same auto-fill pattern used
+   elsewhere) so multiple key cards sit side by side and the panel
+   reads as fully used, like the Meta Generator's card grid does. */
+.api-key-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 10px; max-height: 620px; overflow-y: auto; align-content: start; }
+.api-key-list .hint-text { grid-column: 1 / -1; }
+
+.key-card { background: var(--bg1); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; transition: background-color 150ms var(--ease), border-color 150ms var(--ease); }
+.key-card-active { background: rgba(76,175,125,0.06); border-color: rgba(76,175,125,0.35); }
+.key-card-top { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.key-icon { font-size: 13px; }
+.key-masked { font-family: monospace; font-size: 12px; color: var(--text-dim); flex-shrink: 0; }
+.key-active-pill { background: rgba(76,175,125,0.15); color: #4caf7d; font-size: 10px; font-weight: 700; border-radius: 10px; padding: 2px 9px; }
+.key-card-actions { display: flex; gap: 6px; align-items: center; }
+
+/* v0.9.4 (item 15): nickname (click-to-rename), status badge (text
+   label, not color-only), and the last-tested meta line. */
+.key-nickname { flex: 1; font-size: 13px; font-weight: 600; color: var(--text); cursor: text; border-radius: 4px; padding: 1px 4px; }
+.key-nickname:hover { background: rgba(255,255,255,0.05); }
+.key-nickname[contenteditable="true"] { outline: 1px dashed var(--accent); outline-offset: 1px; background: rgba(91,140,255,0.06); }
+.key-nickname-empty { color: var(--text-dim); font-weight: 400; font-style: italic; }
+.key-status-badge {
+  font-size: 9.5px; font-weight: 700; letter-spacing: 0.02em; border-radius: 4px;
+  padding: 2px 6px; flex-shrink: 0; border: 1px solid transparent;
+}
+.key-status-valid { background: rgba(76,175,125,0.15); color: #4caf7d; border-color: rgba(76,175,125,0.35); }
+.key-status-invalid { background: rgba(229,104,107,0.15); color: #e5686b; border-color: rgba(229,104,107,0.35); }
+.key-status-error { background: rgba(224,169,64,0.15); color: #e0a940; border-color: rgba(224,169,64,0.35); }
+.key-status-unknown { background: rgba(154,160,172,0.12); color: var(--text-dim); border-color: var(--border); }
+.key-card-meta { font-size: 10.5px; color: var(--text-dim); margin: -2px 0 8px; }
+.icon-btn { background: transparent; border: 1px solid transparent; color: var(--text-dim); border-radius: 6px; padding: 5px 8px; font-size: 11px; cursor: pointer; transition: background-color 150ms var(--ease), transform 110ms var(--ease); }
+.icon-btn:hover { background: var(--bg2); }
+.icon-btn:active { transform: scale(0.92); }
+.key-toggle-btn { background: var(--bg2); border: 1px solid var(--border); color: var(--text-dim); border-radius: 6px; padding: 5px 12px; font-size: 11px; font-weight: 600; cursor: pointer; transition: background-color 150ms var(--ease), transform 110ms var(--ease); }
+.key-toggle-btn:hover { background: var(--bg1); }
+.key-toggle-btn:active { transform: scale(0.95); }
+
+.stat-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; margin-bottom: 20px; }
+.stat-card { animation: fadeInUp 220ms var(--ease) both; }
+.stat-grid .stat-card:nth-child(1) { animation-delay: 0ms; }
+.stat-grid .stat-card:nth-child(2) { animation-delay: 25ms; }
+.stat-grid .stat-card:nth-child(3) { animation-delay: 50ms; }
+.stat-grid .stat-card:nth-child(4) { animation-delay: 75ms; }
+.stat-grid .stat-card:nth-child(5) { animation-delay: 100ms; }
+.stat-grid .stat-card:nth-child(6) { animation-delay: 125ms; }
+
+.chart-wrap { margin-top: 4px; }
+
+.kv-list { display: flex; flex-direction: column; gap: 6px; }
+.kv-row { display: flex; justify-content: space-between; font-size: 12px; padding: 4px 0; border-bottom: 1px solid var(--border); animation: fadeInUp 200ms var(--ease) both; }
+.kv-row:nth-child(1) { animation-delay: 0ms; }
+.kv-row:nth-child(2) { animation-delay: 20ms; }
+.kv-row:nth-child(3) { animation-delay: 40ms; }
+.kv-row:nth-child(4) { animation-delay: 60ms; }
+.kv-row:nth-child(5) { animation-delay: 80ms; }
+.kv-row:nth-child(6) { animation-delay: 100ms; }
+.kv-row:nth-child(n+7) { animation-delay: 110ms; }
+.kv-label { color: var(--text-dim); }
+.kv-value { font-weight: 500; }
+
+.textarea { width: 100%; background: var(--bg1); border: 1px solid var(--border); color: var(--text); border-radius: 8px; padding: 10px; font-size: 13px; font-family: inherit; resize: vertical; }
+
+/* v0.8.9: results switched from a flat stacked list to a card grid,
+   matching the Metadata Generator's card-grid look (see .card-grid
+   above) -- each generated prompt is its own card with a word count
+   in the top-right corner and its own delete button. */
+.p2p-results { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; contain: layout style; }
+.p2p-card {
+  position: relative;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 10px 38px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  transition: border-color 150ms var(--ease), box-shadow 150ms var(--ease);
+  /* v0.9.x (Part 11): same content-visibility win as .card above, but
+     p2p-card's height varies with prompt text length (no min-height), so
+     a single fixed contain-intrinsic-size guess risks a visible scroll
+     jump once off-screen cards snap back to their real height. The plain
+     140px line is the safe fallback for browsers that only understand a
+     single-value contain-intrinsic-size; the `auto 140px` line after it
+     is silently dropped by those same browsers (invalid value = ignored,
+     prior valid declaration stands) but on browsers that DO support the
+     two-value 'auto' form, it tells the browser to remember each card's
+     actual rendered size after its first layout instead of reusing the
+     140px guess forever -- the standard progressive-enhancement override
+     pattern, not a fallback chain that needs a feature check. */
+  content-visibility: auto;
+  contain-intrinsic-size: 140px;
+  contain-intrinsic-size: auto 140px;
+}
+.p2p-card:hover { box-shadow: 0 2px 10px rgba(0,0,0,0.18); }
+.p2p-card-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.p2p-card-select { display: flex; align-items: center; gap: 5px; color: var(--text-dim); font-size: 11px; cursor: pointer; }
+.p2p-card-wordcount { font-size: 11.5px; font-weight: 600; color: var(--accent); white-space: nowrap; }
+.p2p-card-text { font-size: 13px; line-height: 1.4; word-break: break-word; flex: 1; }
+.p2p-card-delete {
+  position: absolute; right: 8px; bottom: 8px;
+  width: 24px; height: 24px; border-radius: 6px;
+  border: 1px solid var(--border); background: var(--bg1); color: var(--text-dim);
+  cursor: pointer; display: flex; align-items: center; justify-content: center;
+}
+.p2p-card-delete:hover { color: #e5686b; border-color: #e5686b; background: var(--bg2); }
+
+/* v0.9.3: per-prompt copy (top row, left of word count) and edit
+   (bottom-right, left of delete) buttons, mirroring the Metadata
+   Generator cards' field-copy-btn / card-edit-btn pattern exactly --
+   same icon-btn sizing, same editable-text outline treatment. */
+.p2p-card-copy { display: flex; align-items: center; justify-content: center; }
+.p2p-card-copy svg { display: block; }
+.p2p-card-edit {
+  position: absolute; right: 40px; bottom: 8px;
+  width: 24px; height: 24px; border-radius: 6px;
+  border: 1px solid var(--border); background: var(--bg1); color: var(--text-dim);
+  cursor: pointer; font-size: 12px; display: flex; align-items: center; justify-content: center;
+}
+.p2p-card-edit:hover { background: var(--bg2); color: var(--text); }
+.p2p-card.editing .p2p-card-edit { background: var(--accent); border-color: var(--accent); color: #fff; }
+.p2p-card.editing .p2p-card-text { cursor: text; }
+.p2p-card-text[contenteditable="true"] {
+  outline: 1px dashed var(--accent);
+  outline-offset: 2px;
+  border-radius: 3px;
+  background: rgba(91, 140, 255, 0.06);
+}
+
+/* ---- Prompt-to-Prompt Generator (v0.8.7 rebuild) ---- */
+.p2p-header-row { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 14px; }
+.p2p-layout { display: grid; grid-template-columns: 380px 1fr; gap: 16px; align-items: start; }
+.p2p-left-panel, .p2p-right-panel { padding: 18px; }
+.p2p-field-label { font-size: 12px; color: var(--text-dim); margin: 14px 0 8px; }
+.p2p-btn-row { display: flex; gap: 6px; flex-wrap: wrap; }
+.p2p-choice-btn {
+  background: var(--bg1); border: 1px solid var(--border); color: var(--text-dim);
+  border-radius: 8px; padding: 8px 0; font-size: 12px; font-weight: 600; cursor: pointer;
+  flex: 1; min-width: 44px; text-align: center;
+  transition: background-color 150ms var(--ease), color 150ms var(--ease), border-color 150ms var(--ease), transform 110ms var(--ease);
+}
+.p2p-choice-btn:hover { border-color: var(--accent); }
+.p2p-choice-btn:active { transform: scale(0.96); }
+.p2p-choice-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+.p2p-generate-btn { width: 100%; margin-top: 16px; padding: 11px; font-size: 13px; }
+.p2p-word-count { text-align: right; font-size: 11px; color: var(--text-dim); margin-top: 4px; }
+
+/* 15-slot (5x3) reference image grid for the "From Image" tab -- each
+   slot is either an empty "+" click target (opens the file picker,
+   filling slots in order) or a filled thumbnail with a remove button,
+   never both at once within one slot. */
+.p2p-image-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
+.p2p-image-slot {
+  aspect-ratio: 1 / 1; border-radius: 8px; border: 1.5px dashed var(--border);
+  background: var(--bg1); display: flex; align-items: center; justify-content: center;
+  color: var(--text-dim); font-size: 20px; cursor: pointer; position: relative; overflow: hidden;
+}
+.p2p-image-slot:hover { border-color: var(--accent); color: var(--accent); }
+.p2p-image-slot.filled { border-style: solid; cursor: default; padding: 0; }
+.p2p-image-slot img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.p2p-image-slot .p2p-slot-remove {
+  position: absolute; top: 3px; right: 3px; width: 18px; height: 18px; border-radius: 50%;
+  background: rgba(0,0,0,0.65); color: #fff; border: none; font-size: 11px; line-height: 18px;
+  text-align: center; cursor: pointer; padding: 0;
+}
+
+.p2p-results-header { margin-bottom: 10px; }
+.p2p-results-toolbar { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+.p2p-results-toolbar .btn { font-size: 11px; padding: 7px 12px; }
+.p2p-empty-hint { color: var(--text-dim); font-size: 13px; text-align: center; margin-top: 40px; grid-column: 1 / -1; }
+
+/* ---- Nav rail: thinner horizontal footprint per item (v0.8.7) --
+   previously the active/hover highlight spanned the sidebar's full
+   width edge-to-edge; a horizontal inset makes the highlighted shape
+   hug the icon/label instead.
+   v0.8.9.2: this rule's shorthand "margin: 0 6px" was zeroing out the
+   top/bottom margin, silently overriding .nav-item's own
+   margin-bottom (it comes later in the file, same specificity) --
+   that's why the icons still looked like they were hugging each other
+   even after that value was bumped up above. Now only sets the
+   horizontal inset and leaves vertical spacing to .nav-item. */
+.sidebar .nav-item { margin: 0 6px 10px; width: calc(100% - 12px); border-radius: 10px; }
+
+/* v0.9.4: shared Toast system (see toast.js). Fixed to the viewport
+   (not .content), bottom-right, stacked -- deliberately never blocks
+   or steals focus from whatever the person is doing. Reuses the
+   established status-color palette (success #4caf7d / error #e5686b /
+   accent #5b8cff) rather than inventing a new one. */
+.toast-stack {
+  position: fixed; right: 18px; bottom: 18px; z-index: 1000;
+  display: flex; flex-direction: column; gap: 8px;
+  max-width: 360px; pointer-events: none;
+}
+.toast {
+  display: flex; align-items: center; gap: 8px;
+  background: var(--bg2); border: 1px solid var(--border); border-radius: 10px;
+  padding: 10px 12px; box-shadow: 0 6px 20px rgba(0,0,0,0.32);
+  font-size: 13px; color: var(--text);
+  opacity: 0; transform: translateY(8px) scale(0.98);
+  transition: opacity 160ms var(--ease), transform 160ms var(--ease);
+  pointer-events: auto;
+}
+.toast-in { opacity: 1; transform: translateY(0) scale(1); }
+.toast-out { opacity: 0; transform: translateY(8px) scale(0.98); }
+.toast-icon { font-size: 14px; flex-shrink: 0; }
+.toast-success .toast-icon { color: #4caf7d; }
+.toast-warning .toast-icon { color: #e0a940; }
+.toast-error .toast-icon { color: #e5686b; }
+.toast-info .toast-icon { color: var(--accent); }
+.toast-message { flex: 1; line-height: 1.35; }
+.toast-action {
+  background: var(--accent); border: none; color: #fff; border-radius: 6px;
+  padding: 4px 10px; font-size: 12px; font-weight: 600; cursor: pointer; flex-shrink: 0;
+}
+.toast-action:hover { filter: brightness(1.08); }
+.toast-dismiss {
+  background: none; border: none; color: var(--text-dim); cursor: pointer;
+  font-size: 15px; line-height: 1; padding: 0 0 0 2px; flex-shrink: 0;
+}
+.toast-dismiss:hover { color: var(--text); }
+@media (prefers-reduced-motion: reduce) {
+  .toast { transition: none; }
+}
+
+/* v0.9.4: per-card selection checkbox, top-left corner overlaying the
+   thumbnail. Deliberately a real <label>+<input type=checkbox> (not a
+   div with a click handler) for free keyboard/screen-reader support,
+   styled to look like a small custom checkbox rather than the raw OS
+   widget. Sits on its own layer so it can never be mistaken for -- or
+   accidentally trigger -- the regen/delete/edit buttons elsewhere on
+   the card (item 6's "must not accidentally trigger" requirement). */
+.card-select {
+  position: absolute; top: 6px; left: 6px; z-index: 3;
+  width: 18px; height: 18px; cursor: pointer;
+}
+.card-select-check { position: absolute; opacity: 0; width: 18px; height: 18px; margin: 0; cursor: pointer; }
+.card-select-box {
+  position: absolute; inset: 0; border-radius: 5px;
+  border: 1.5px solid rgba(231,233,238,0.55); background: rgba(20,21,26,0.55);
+  transition: background-color 120ms var(--ease), border-color 120ms var(--ease);
+}
+.card-select-box::after {
+  content: ''; position: absolute; left: 5px; top: 1px; width: 5px; height: 9px;
+  border: solid #fff; border-width: 0 2px 2px 0; transform: rotate(45deg);
+  opacity: 0; transition: opacity 100ms var(--ease);
+}
+.card-select-check:checked ~ .card-select-box { background: var(--accent); border-color: var(--accent); }
+.card-select-check:checked ~ .card-select-box::after { opacity: 1; }
+.card-select:hover .card-select-box { border-color: var(--accent); }
+.card.selected { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+
+/* v0.9.4: contextual selection toolbar -- hidden (height:0, collapsed)
+   until at least one card is selected, per RULE 7/8 (no dead gap when
+   empty, smooth show/hide rather than an instant snap). Sits between
+   the grid-header and the card grid on the Meta Generator page. */
+.selection-bar {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  max-height: 0; opacity: 0; overflow: hidden; margin: 0;
+  transition: max-height 180ms var(--ease), opacity 150ms var(--ease), margin 180ms var(--ease);
+}
+.selection-bar.visible { max-height: 60px; opacity: 1; margin: 0 0 12px; }
+.selection-bar-count { font-size: 13px; font-weight: 600; color: var(--text); }
+.selection-bar .btn { font-size: 12px; padding: 6px 11px; }
+.selection-bar-clear { margin-left: auto; }
+
+/* v0.9.4: state-driven action buttons (Retry Failed / Generate
+   Remaining relabel) -- hidden by default, shown only when their
+   underlying count is > 0 (RULE 3). */
+.btn[data-count-hidden] { display: none; }
+
+/* v0.9.4: compact success/failed/processing breakdown under the
+   progress bar (item 11) -- only shown while a batch is actually
+   running or just finished, hidden otherwise so it doesn't clutter
+   idle state. */
+/* v0.9.5: now sits inline inside .status-row-left, next to #status,
+   instead of its own row underneath -- no longer needs its own
+   top margin. */
+.progress-breakdown { display: flex; gap: 12px; font-size: 12px; flex-wrap: wrap; }
+.pb-chip { display: inline-flex; align-items: center; gap: 4px; color: var(--text-dim); }
+.pb-success { color: #4caf7d; }
+.pb-failed { color: #e5686b; }
+.pb-processing { color: var(--accent); }
+
+/* v0.9.4 (item 12): copy-feedback tint for icon-only copy buttons --
+   see flashCopied() in app.js. Works for any icon-btn since they all
+   use stroke="currentColor" already. */
+.copy-flash { color: #4caf7d !important; border-color: #4caf7d !important; }
+
+/* v0.9.4 (item 14): Embed Dry Run panel -- summary chips, category
+   filters, and a compact scrollable row list. Uses the same chip/
+   filter-button visual language as the progress breakdown and the
+   view-select dropdown elsewhere, rather than inventing a new pattern. */
+.dry-run-panel { margin-top: 10px; border: 1px solid var(--border); border-radius: 10px; padding: 12px; background: var(--bg1); }
+.dry-run-summary { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px; margin-bottom: 10px; }
+.dry-run-summary .drs-matched { color: #4caf7d; }
+.dry-run-summary .drs-missing_image, .dry-run-summary .drs-missing_metadata { color: #e0a940; }
+.dry-run-summary .drs-unsupported { color: #e5686b; }
+.dry-run-summary .drs-already_embedded { color: var(--text-dim); }
+.dry-run-filters { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
+.dry-run-filter-btn {
+  background: var(--bg2); border: 1px solid var(--border); color: var(--text-dim);
+  border-radius: 8px; padding: 4px 10px; font-size: 11px; cursor: pointer;
+}
+.dry-run-filter-btn:hover { border-color: var(--accent); color: var(--text); }
+.dry-run-filter-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+.dry-run-rows { max-height: 220px; overflow-y: auto; font-size: 12px; }
+.dry-run-row { display: flex; justify-content: space-between; gap: 10px; padding: 4px 6px; border-radius: 6px; }
+.dry-run-row:nth-child(odd) { background: rgba(255,255,255,0.02); }
+.dry-run-row-name { color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dry-run-row-cat { flex-shrink: 0; font-weight: 600; }
+.dry-run-row-cat.matched { color: #4caf7d; }
+.dry-run-row-cat.missing_image, .dry-run-row-cat.missing_metadata { color: #e0a940; }
+.dry-run-row-cat.unsupported { color: #e5686b; }
+.dry-run-row-cat.already_embedded { color: var(--text-dim); }
+
+/* v0.9.4: shared Confirm modal (see confirm.js). Used sparingly --
+   only for genuinely destructive actions, per the spec's own "do not
+   show unnecessary confirmation when there is no meaningful risk". */
+.confirm-backdrop {
+  position: fixed; inset: 0; z-index: 2000;
+  background: rgba(10,11,14,0.55);
+  display: flex; align-items: center; justify-content: center;
+  opacity: 0; transition: opacity 150ms var(--ease);
+}
+.confirm-backdrop.confirm-in { opacity: 1; }
+.confirm-dialog {
+  background: var(--bg2); border: 1px solid var(--border); border-radius: 12px;
+  padding: 20px; width: 360px; max-width: calc(100vw - 40px);
+  box-shadow: 0 12px 40px rgba(0,0,0,0.4);
+  transform: translateY(6px) scale(0.98); transition: transform 150ms var(--ease);
+}
+.confirm-backdrop.confirm-in .confirm-dialog { transform: translateY(0) scale(1); }
+.confirm-title { font-size: 15px; font-weight: 700; color: var(--text); margin-bottom: 8px; }
+.confirm-message { font-size: 13px; color: var(--text-dim); line-height: 1.5; margin-bottom: 18px; }
+.confirm-actions { display: flex; justify-content: flex-end; gap: 8px; }
+@media (prefers-reduced-motion: reduce) {
+  .confirm-backdrop, .confirm-dialog { transition: none; }
+}
+
+/* ============================================================
+   v0.9.4: "Neon" theme -- third option alongside Dark/White.
+   Deep navy base (set via THEME_PALETTES.neon in theme.js) plus a
+   distinct visual treatment layered on top here: gradient primary
+   buttons and soft glowing borders on panels/cards. Everything below
+   is scoped to [data-theme="neon"] (set on <html> by
+   ThemeManager.applyPalette), so Dark/White are completely untouched
+   -- this never leaks into the other two modes.
+   ============================================================ */
+/* Unscoped deliberately (unlike everything else in this block) -- the
+   Neon option in the mode picker should preview its own gradient look
+   at all times, not just once it's already selected, so it visually
+   stands out as "the special one" while browsing Dark/White too. */
+.theme-mode-btn-neon {
+  background: linear-gradient(135deg, #00e5ff, #7b5cff);
+  border-color: transparent; color: #06121c; font-weight: 700;
+}
+.theme-mode-btn-neon:hover { filter: brightness(1.08); }
+
+[data-theme="neon"] .btn-primary {
+  background: linear-gradient(135deg, #00e5ff, #7b5cff);
+  border-color: transparent; color: #06121c; font-weight: 700;
+  box-shadow: 0 0 14px rgba(0, 229, 255, 0.35), 0 0 2px rgba(123, 92, 255, 0.5);
+}
+[data-theme="neon"] .btn-primary:hover {
+  box-shadow: 0 0 22px rgba(0, 229, 255, 0.55), 0 0 4px rgba(123, 92, 255, 0.7);
+  filter: brightness(1.06);
+}
+
+[data-theme="neon"] .panel,
+[data-theme="neon"] .card,
+[data-theme="neon"] .key-card,
+[data-theme="neon"] .p2p-card,
+[data-theme="neon"] .control-panel,
+[data-theme="neon"] .dry-run-panel,
+[data-theme="neon"] .confirm-dialog,
+[data-theme="neon"] .toast {
+  border-color: rgba(0, 229, 255, 0.22);
+  box-shadow: 0 0 0 1px rgba(0, 229, 255, 0.06), 0 0 18px rgba(0, 229, 255, 0.05);
+}
+
+[data-theme="neon"] .card:hover,
+[data-theme="neon"] .key-card:hover,
+[data-theme="neon"] .p2p-card:hover {
+  border-color: rgba(0, 229, 255, 0.45);
+  box-shadow: 0 0 0 1px rgba(0, 229, 255, 0.12), 0 0 22px rgba(0, 229, 255, 0.12);
+}
+
+[data-theme="neon"] .card.selected {
+  border-color: #00e5ff;
+  box-shadow: 0 0 0 1px #00e5ff, 0 0 16px rgba(0, 229, 255, 0.5);
+}
+
+[data-theme="neon"] .sidebar .nav-item.active {
+  background: linear-gradient(135deg, rgba(0,229,255,0.16), rgba(123,92,255,0.14));
+  box-shadow: inset 0 0 0 1px rgba(0, 229, 255, 0.35), 0 0 14px rgba(0, 229, 255, 0.18);
+  color: #00e5ff;
+}
+
+[data-theme="neon"] input:focus,
+[data-theme="neon"] textarea:focus,
+[data-theme="neon"] select:focus {
+  outline: none;
+  border-color: rgba(0, 229, 255, 0.6);
+  box-shadow: 0 0 0 3px rgba(0, 229, 255, 0.15);
+}
+
+[data-theme="neon"] .range-input { accent-color: #00e5ff; }
+
+[data-theme="neon"] .version-pill {
+  background: linear-gradient(135deg, rgba(0,229,255,0.18), rgba(123,92,255,0.16));
+  border-color: rgba(0, 229, 255, 0.4); color: #00e5ff;
+}
+
+[data-theme="neon"] .online-dot {
+  background: #00e5ff;
+  box-shadow: 0 0 6px rgba(0, 229, 255, 0.8);
+}
+
+[data-theme="neon"] .toast-action {
+  background: linear-gradient(135deg, #00e5ff, #7b5cff); color: #06121c;
+}
+
+/* v0.9.5: white text on a solid cyan background is genuinely hard to
+   read -- this only touches PLAIN solid-var(--accent)-background
+   elements (active tabs/filters/toggles, the "Apply to All Keys"
+   button, etc.), not .btn-primary or .toast-action above, which are
+   already gradients with dark text and were explicitly fine as-is. */
+[data-theme="neon"] .view-select-option.active,
+[data-theme="neon"] .api-tab.active,
+[data-theme="neon"] .p2p-choice-btn.active,
+[data-theme="neon"] .dry-run-filter-btn.active,
+[data-theme="neon"] .api-apply-btn,
+[data-theme="neon"] .card.editing .card-edit-btn,
+[data-theme="neon"] .p2p-card.editing .p2p-card-edit {
+  color: #06121c;
+}
+
+
+/* ==========================================================================
+   Batch (formerly Automation Queue -- BETA), v0.1.0 → embedded v0.9.6
+   New, additive rules only -- nothing above this block is modified.
+   ========================================================================== */
+
+/* ==========================================================================
+   Automation Queue -- BETA (v0.1.0)
+   New, additive rules only -- nothing above this block is modified.
+   ========================================================================== */
+
+.quick-violet { background: #6d5bd0; }
+
+.beta-pill {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: #fff;
+  background: #6d5bd0;
+  border-radius: 6px;
+  padding: 2px 7px;
+  margin-left: 8px;
+  vertical-align: middle;
+}
+
+.automation-dropzone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 2px dashed var(--border);
+  border-radius: 12px;
+  color: var(--text-dim);
+  padding: 22px;
+  margin-bottom: 18px;
+  transition: border-color 180ms var(--ease), background-color 180ms var(--ease), transform 180ms var(--ease);
+}
+.automation-dropzone.drag-active {
+  border-color: #6d5bd0;
+  background: rgba(109, 91, 208, 0.08);
+  transform: scale(1.004);
+}
+.automation-dropzone.drop-success { animation: dropSuccessPulse 420ms var(--ease); }
+.automation-dropzone .dropzone-icon { font-size: 28px; }
+
+.automation-queue-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-top: 4px;
+}
+
+.automation-queue-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 40vh;
+  overflow-y: auto;
+  margin-bottom: 16px;
+}
+
+.automation-job {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 8px 10px;
+  transition: border-color 150ms var(--ease), transform 110ms var(--ease), opacity 150ms var(--ease);
+}
+.automation-job.dragging { opacity: 0.5; }
+.automation-job.drop-target { border-color: #6d5bd0; }
+
+.automation-job-drag { cursor: grab; color: var(--text-dim); font-size: 14px; }
+.automation-job-num { font-size: 12px; color: var(--text-dim); width: 20px; text-align: right; flex-shrink: 0; }
+.automation-job-info { flex: 1; min-width: 0; }
+.automation-job-name { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.automation-job-meta { font-size: 11px; color: var(--text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.automation-job-status {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: var(--bg1);
+  color: var(--text-dim);
+  border: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.automation-job-status.status-waiting { color: var(--text-dim); }
+.automation-job-status.status-running { color: var(--accent); border-color: var(--accent); }
+.automation-job-status.status-done { color: #4caf7d; border-color: #4caf7d; }
+.automation-job-status.status-error { color: #e06a6a; border-color: #e06a6a; }
+.automation-job-status.status-stopped { color: #d99b3f; border-color: #d99b3f; }
+.automation-job-status.status-not-found { color: #e06a6a; border-color: #e06a6a; }
+
+.automation-controls { display: flex; align-items: center; }
+
+.automation-phase-note { margin-top: 10px; }
+
+/* ---- compact per-folder preset/settings popover (spec item 8) ---- */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+}
+.modal-backdrop[hidden] { display: none; }
+.modal-panel {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px;
+  width: 360px;
+  max-width: 90vw;
+  max-height: 85vh;
+  overflow-y: auto;
+}
+.automation-preset-panel .hex-label { justify-content: space-between; margin-bottom: 10px; }
+.automation-prompt-box {
+  width: 100%;
+  background: var(--bg1);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 6px;
+  padding: 8px;
+  font-size: 12px;
+  font-family: inherit;
+  resize: vertical;
+}
+
+.automation-progress-banner {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 14px;
+  margin-bottom: 14px;
+}
+.automation-progress-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  font-size: 13px;
+  margin-bottom: 6px;
+}
+.automation-progress-row:last-child { margin-bottom: 0; margin-top: 6px; }
+.automation-progress-bar {
+  height: 8px;
+  border-radius: 4px;
+  background: var(--bg1);
+  overflow: hidden;
+}
+.automation-progress-fill {
+  height: 100%;
+  width: 0%;
+  background: #6d5bd0;
+  transition: width 200ms var(--ease);
+}
+
+.automation-resume-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: rgba(217, 155, 63, 0.1);
+  border: 1px solid #d99b3f;
+  border-radius: 10px;
+  padding: 10px 14px;
+  margin-top: 10px;
+  font-size: 13px;
+}
+
+.dry-run-row { display: flex; align-items: center; gap: 8px; padding: 4px 0; font-size: 13px; }
+.dry-run-row .dry-run-icon { width: 16px; text-align: center; }
+.dry-run-summary { font-size: 13px; margin-bottom: 8px; }

@@ -1,0 +1,894 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>MetaZone</title>
+<link rel="stylesheet" href="styles/base.css">
+<link rel="stylesheet" href="styles/animations.css">
+<!-- v0.9.1: runs before body paints so the whole UI scales to fit
+     the current monitor/window size (720p up through 4K) with no
+     visible flash of the wrong size first. See file header for why
+     this is a real fix and not just a cosmetic tweak. -->
+<script src="js/viewport-scale.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-left">
+      <img class="brand-mark" src="assets/icon.png" alt="MetaZone">
+      <span class="brand-name">Meta Zone</span>
+      <span class="version-pill" id="versionPill">v0.9.8</span>
+      <span class="online-pill"><span class="online-dot"></span> Online</span>
+    </div>
+    <div class="topbar-right">
+      <button id="btnStopAll" class="btn btn-danger" style="display:none;">■ Stop All</button>
+      <button id="btnRefresh" class="btn">⟳ Refresh</button>
+      <div class="topbar-copyright">
+        <div>All Rights Reserved By</div>
+        <div>© HASIBNIKON</div>
+      </div>
+    </div>
+  </header>
+
+  <div class="app-shell">
+    <nav class="sidebar">
+      <button class="nav-item active" data-page="dashboard" title="Home">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M12 3.3 3 11h2v8.4A1.1 1.1 0 0 0 6.1 20.5H9.8v-6h4.4v6h3.7a1.1 1.1 0 0 0 1.1-1.1V11h2Z"/></svg>
+        <span>Home</span>
+      </button>
+      <button class="nav-item" data-page="meta" title="Meta">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="currentColor"><path fill-rule="evenodd" clip-rule="evenodd" d="M12.9 3H6.4A2.4 2.4 0 0 0 4 5.4v6.5c0 .64.25 1.24.7 1.7l8.4 8.4a2.4 2.4 0 0 0 3.4 0l6.1-6.1a2.4 2.4 0 0 0 0-3.4l-8.4-8.4A2.4 2.4 0 0 0 12.9 3Zm-4.7 6.6a1.7 1.7 0 1 0 0-3.4 1.7 1.7 0 0 0 0 3.4Z"/></svg>
+        <span>Meta</span>
+      </button>
+      <button class="nav-item" data-page="embed" title="Embed">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="currentColor"><path fill-rule="evenodd" clip-rule="evenodd" d="M12 1.6 21.5 7v10L12 22.4 2.5 17V7Zm0 2.7L5.3 8.3v7.4L12 19.7l6.7-4V8.3Z"/></svg>
+        <span>Embed</span>
+      </button>
+      <button class="nav-item" data-page="prompt" title="Image to Prompt">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="currentColor"><path fill-rule="evenodd" clip-rule="evenodd" d="M4 4a1 1 0 0 0-1 1v14a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1V5a1 1 0 0 0-1-1Zm1 2h14v9.2l-2.9-2.9a1 1 0 0 0-1.4 0L11 16l-2.6-2.6a1 1 0 0 0-1.4 0L5 15.4Z"/><circle cx="8.2" cy="9" r="1.6"/></svg>
+        <span>Prompt</span>
+      </button>
+      <button class="nav-item" data-page="p2p" title="Prompt-to-Prompt">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M17 2.6 21 6.5 17 10.4V8.2H8.3a1.1 1.1 0 0 1 0-2.2H17Z"/><path d="M7 21.4 3 17.5 7 13.6v2.2h8.7a1.1 1.1 0 0 1 0 2.2H7Z"/></svg>
+        <span>P2P</span>
+      </button>
+      <button class="nav-item" data-page="settings" title="API Manager">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="currentColor"><path fill-rule="evenodd" clip-rule="evenodd" d="M8.6 2.6a5.4 5.4 0 1 0 2.9 9.94L13 14v2h2v2h2v2H21v-3.5l-6.55-6.55A5.4 5.4 0 0 0 8.6 2.6Zm0 2.4a3 3 0 1 1 0 6 3 3 0 0 1 0-6Z"/></svg>
+        <span>API</span>
+      </button>
+      <button class="nav-item" data-page="appearance" title="Setting">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="currentColor"><rect x="3" y="5.3" width="18" height="2.4" rx="1.2"/><circle cx="15" cy="6.5" r="2.6"/><rect x="3" y="10.8" width="18" height="2.4" rx="1.2"/><circle cx="9" cy="12" r="2.6"/><rect x="3" y="16.3" width="18" height="2.4" rx="1.2"/><circle cx="17" cy="17.5" r="2.6"/></svg>
+        <span>Setting</span>
+      </button>
+      <button class="nav-item" data-page="automation" title="Batch">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="currentColor"><path fill-rule="evenodd" clip-rule="evenodd" d="M3 5.4A2.4 2.4 0 0 1 5.4 3h4.2l1.8 2.4h7.2A2.4 2.4 0 0 1 21 7.8v10.8A2.4 2.4 0 0 1 18.6 21H5.4A2.4 2.4 0 0 1 3 18.6Z"/></svg>
+        <span>Batch</span>
+      </button>
+    </nav>
+
+    <main class="content">
+      <section id="page-meta" class="page meta-page" hidden>
+        <aside class="control-panel" id="controlPanel">
+          <button id="btnCollapsePanel" class="panel-collapse-btn" title="Hide panel">
+            <svg class="panel-collapse-icon" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg>
+          </button>
+          <div class="control-panel-inner">          <div class="control-label">CONTROL PANEL</div>
+          <div class="key-summary-header key-summary-header-row" id="apiInfoNav" title="Open API Manager"><span class="key-summary-label">🔑 API INFO</span> <button id="btnCheckKeys" class="link-btn key-check-link">Check</button></div>
+          <div id="keySummary" class="key-summary" title="Open API Manager">Checking keys…</div>
+
+          <div class="control-slider-row">
+            <span>Concurrent Generations</span><span id="concurrencyVal" class="control-val">10x</span>
+          </div>
+          <input id="optConcurrency" type="range" min="1" max="20" value="10" class="range-input">
+
+          <div class="control-label" style="margin-top:16px;">METADATA SETTINGS</div>
+
+          <label class="control-field-label">Platform</label>
+          <select id="optPlatform" class="sel-full"></select>
+
+          <label class="control-field-label">File Type</label>
+          <select id="optFileType" class="sel-full"></select>
+
+          <div class="control-slider-row"><span>Title Length</span><span id="titleCharsVal" class="control-val">130</span></div>
+          <input id="optTitleChars" type="range" min="10" max="300" value="130" class="range-input">
+
+          <div class="control-slider-row"><span>Description Length</span><span id="descCharsVal" class="control-val">200</span></div>
+          <input id="optDescChars" type="range" min="20" max="500" value="200" class="range-input">
+
+          <div class="control-toggle-row">
+            <span>Generate Description</span>
+            <label class="switch"><input id="optIncludeDesc" type="checkbox"><span class="switch-track"></span></label>
+          </div>
+
+          <div class="control-slider-row"><span>Keywords Count</span><span id="kwCountVal" class="control-val">49</span></div>
+          <input id="optKwCount" type="range" min="5" max="49" value="49" class="range-input">
+
+          <div class="control-label" style="margin-top:16px;">CUSTOM SYSTEM PROMPT</div>
+          <textarea id="optCustomPrompt" class="textarea" rows="3" placeholder="e.g. Focus on the content and make the title detailed"></textarea>
+          <button id="btnResetDefaults" class="link-btn">↺ Reset to Default</button>
+
+          <button id="btnToggleAdvanced" class="adv-toggle-btn">▶ Advanced Options</button>
+          <div id="advancedBody" class="advanced-body">
+            <div class="control-label">TITLE PREFIX / SUFFIX</div>
+            <div class="control-toggle-row">
+              <span>Add Prefix</span>
+              <label class="switch"><input id="optPrefixOn" type="checkbox"><span class="switch-track"></span></label>
+            </div>
+            <input id="optPrefixText" type="text" class="text-input" placeholder="Type prefix text here…" hidden>
+            <div class="control-toggle-row">
+              <span>Add Suffix</span>
+              <label class="switch"><input id="optSuffixOn" type="checkbox"><span class="switch-track"></span></label>
+            </div>
+            <input id="optSuffixText" type="text" class="text-input" placeholder="Type suffix text here…" hidden>
+            <div class="control-toggle-row">
+              <span>Single Word Keywords</span>
+              <label class="switch"><input id="optSingleKw" type="checkbox"><span class="switch-track"></span></label>
+            </div>
+            <div class="control-toggle-row">
+              <span>🚫 Avoid Copyright</span>
+              <label class="switch"><input id="optAvoidCopyright" type="checkbox"><span class="switch-track"></span></label>
+            </div>
+          </div>
+        </div>
+        </aside>
+
+        <div class="meta-content drag-scroll-zone">
+          <div id="dropzone" class="dropzone clickable">
+            <div class="dropzone-media" id="dropzoneMedia">
+              <p id="dropzoneText">Click anywhere in this box or just drag and drop files.</p>
+              <p id="dropzoneFormats" class="hint-text">Supported file formats are Ai, EPS, SVG, JPG, PNG, MP4, MOV.</p>
+              <div id="importGrid" class="import-grid" hidden></div>
+            </div>
+          </div>
+
+          <div class="meta-action-row">
+            <div class="meta-action-group">
+              <button id="btnEmbedBatch" class="btn btn-primary" style="display:none;" title="Embed this finished batch">📦 Embed</button>
+              <button id="btnClear" class="btn btn-danger">🗑 Clear All</button>
+              <button id="btnGenerate" class="btn btn-primary"><span id="btnGenerateLabel">✨ Generate</span> (<span id="genCount">0</span>)</button>
+              <button id="btnRetryFailed" class="btn" data-count-hidden>↻ Retry Failed</button>
+              <button id="btnPause" class="btn" disabled>⏸ Pause</button>
+              <button id="btnStop" class="btn" disabled>■ Stop</button>
+              <div id="autoCsvToggleWrap" class="btn btn-toggle meta-auto-csv-toggle" role="switch" aria-checked="false" tabindex="0">
+                <span>Auto Download CSV</span>
+                <label class="switch"><input id="optAutoDownloadCsv" type="checkbox"><span class="switch-track"></span></label>
+              </div>
+              <button id="btnDownloadCsv" class="btn">⬇ Download CSV</button>
+            </div>
+            <button id="btnBrowse" class="btn meta-action-browse">📁 Browse</button>
+          </div>
+          <div class="progress-wrap" id="progressWrap" style="display:none;">
+            <div class="progress-bar" id="progressBar"></div>
+          </div>
+          <div class="status-row">
+            <div class="status-row-left">
+              <span id="status" class="status-text"></span>
+              <div class="progress-breakdown" id="progressBreakdown" style="display:none;">
+                <span class="pb-chip pb-success">✓ <span id="pbSuccess">0</span> successful</span>
+                <span class="pb-chip pb-failed">✕ <span id="pbFailed">0</span> failed</span>
+                <span class="pb-chip pb-processing">⏳ <span id="pbProcessing">0</span> processing</span>
+              </div>
+            </div>
+            <span id="statusModel" class="status-model-text"></span>
+          </div>
+
+          <div class="grid-header">
+            <h2 class="panel-title">Generated Metadata (<span id="gridCount">0</span>)</h2>
+            <div class="view-select" id="viewSelect">
+              <button type="button" class="view-select-btn" id="btnViewSelect" title="Arrange cards" aria-haspopup="true" aria-expanded="false">
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+                View
+              </button>
+              <div class="view-select-menu" id="viewSelectMenu">
+                <button type="button" class="view-select-option" data-cols="2">2</button>
+                <button type="button" class="view-select-option active" data-cols="3">3</button>
+                <button type="button" class="view-select-option" data-cols="4">4</button>
+              </div>
+            </div>
+          </div>
+          <div id="selectionBar" class="selection-bar">
+            <span class="selection-bar-count"><span id="selectionCount">0</span> selected</span>
+            <button id="btnGenerateSelected" class="btn btn-primary">✨ Regenerate Selected</button>
+            <button id="btnRemoveSelected" class="btn btn-danger">🗑 Remove Selected</button>
+            <button id="btnSelectAll" class="btn selection-bar-selectall">Select All</button>
+            <button id="btnClearSelection" class="btn selection-bar-clear">Clear Selection</button>
+          </div>
+          <div id="cardGrid" class="card-grid"></div>
+          <div id="emptyState" class="empty-state">Results will appear here once generation completes each image — cards never move once placed.</div>
+        </div>
+      </section>
+
+      <section id="page-prompt" class="page meta-page" hidden>
+        <aside class="control-panel" id="controlPanelPrompt">
+          <button id="btnCollapsePanelPrompt" class="panel-collapse-btn" title="Hide panel">
+            <svg class="panel-collapse-icon" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg>
+          </button>
+          <div class="control-panel-inner">
+          <div class="control-label">CONTROL PANEL</div>
+          <div class="key-summary-header key-summary-header-row" id="apiInfoNavPrompt" title="Open API Manager"><span class="key-summary-label">🔑 API INFO</span> <button id="btnCheckKeysPrompt" class="link-btn key-check-link">Check</button></div>
+          <div id="keySummaryPrompt" class="key-summary" title="Open API Manager">Checking keys…</div>
+
+          <div class="control-slider-row">
+            <span>Concurrent Generations</span><span id="concurrencyValPrompt" class="control-val">10x</span>
+          </div>
+          <input id="optConcurrencyPrompt" type="range" min="1" max="20" value="10" class="range-input">
+
+          <div class="control-label" style="margin-top:16px;">PROMPT SETTINGS</div>
+
+          <label class="control-field-label">Max Prompt Words</label>
+          <select id="optMaxPromptWords" class="sel-full">
+            <option value="50">50</option>
+            <option value="100">100</option>
+            <option value="200">200</option>
+            <option value="300">300</option>
+            <option value="500" selected>500</option>
+            <option value="1000">1000</option>
+          </select>
+
+          <label class="control-field-label">Prompt Style</label>
+          <select id="optPromptStyle" class="sel-full"></select>
+
+          <div class="control-label" style="margin-top:16px;">CUSTOM SYSTEM PROMPT</div>
+          <textarea id="optCustomPromptGen" class="textarea" rows="3" placeholder="e.g. Focus on lighting and composition"></textarea>
+          <button id="btnResetDefaultsPrompt" class="link-btn">↺ Reset to Default</button>
+          </div>
+        </aside>
+
+        <div class="meta-content drag-scroll-zone">
+          <div class="grid-header">
+            <h2 class="panel-title">Image to Prompt Generator</h2>
+            <div class="meta-action-group">
+              <button id="btnClearPrompt" class="btn btn-danger">🗑 Clear All</button>
+              <button id="btnGeneratePrompt" class="btn btn-primary">✨ Generate (<span id="genCountPrompt">0</span>)</button>
+              <button id="btnExportCsvPrompt" class="btn">⬇ Export CSV</button>
+              <button id="btnSavePrompt" class="btn btn-primary">💾 Save</button>
+            </div>
+          </div>
+
+          <div id="dropzonePrompt" class="dropzone clickable">
+            <div class="dropzone-media" id="dropzoneMediaPrompt">
+              <p id="dropzoneTextPrompt">Click anywhere in this box, or drag &amp; drop images, to import</p>
+              <div id="importGridPrompt" class="import-grid" hidden></div>
+            </div>
+          </div>
+
+          <div class="meta-action-row">
+            <div class="meta-action-group">
+              <button id="btnPausePrompt" class="btn" disabled>⏸ Pause</button>
+              <button id="btnStopPrompt" class="btn" disabled>■ Stop</button>
+            </div>
+            <button id="btnBrowsePrompt" class="btn meta-action-browse">📁 Browse</button>
+          </div>
+          <div class="progress-wrap" id="progressWrapPrompt" style="display:none;">
+            <div class="progress-bar" id="progressBarPrompt"></div>
+          </div>
+          <div class="status-row">
+            <span id="statusPrompt" class="status-text"></span>
+            <span id="statusModelPrompt" class="status-model-text"></span>
+          </div>
+
+          <div class="grid-header">
+            <h2 class="panel-title">Generated Prompts (<span id="gridCountPrompt">0</span>)</h2>
+            <div class="view-select" id="viewSelectPrompt">
+              <button type="button" class="view-select-btn" id="btnViewSelectPrompt" title="Arrange cards" aria-haspopup="true" aria-expanded="false">
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+                View
+              </button>
+              <div class="view-select-menu" id="viewSelectMenuPrompt">
+                <button type="button" class="view-select-option" data-cols="2">2</button>
+                <button type="button" class="view-select-option active" data-cols="3">3</button>
+                <button type="button" class="view-select-option" data-cols="4">4</button>
+              </div>
+            </div>
+          </div>
+          <div id="cardGridPrompt" class="card-grid"></div>
+          <div id="emptyStatePrompt" class="empty-state">Results will appear here once generation completes each image — cards never move once placed.</div>
+        </div>
+      </section>
+
+      <section id="page-embed" class="page embed-page" hidden>
+        <div class="embed-panel-col">
+          <div class="panel embed-panel">
+            <div class="embed-step embed-dropzone" id="embedCsvDropzone">
+              <div class="embed-step-row">
+                <div class="embed-step-label"><span class="step-num">1</span> Load CSV</div>
+                <button id="btnBrowseCsv" class="btn btn-primary">Browse</button>
+              </div>
+              <div id="csvStatus" class="step-status">No CSV loaded — drag &amp; drop a .csv here, or Browse</div>
+            </div>
+
+            <div class="embed-step embed-dropzone" id="embedFolderDropzone">
+              <div class="embed-step-row">
+                <div class="embed-step-label"><span class="step-num">2</span> File Location</div>
+                <button id="btnBrowseFolder" class="btn btn-primary">Browse</button>
+              </div>
+              <div id="folderStatus" class="step-status">No folder selected — drag &amp; drop a folder here, or Browse</div>
+              <div id="matchCountStatus" class="step-status match-count-status" hidden></div>
+            </div>
+
+            <div class="embed-map-grid">
+              <div class="embed-map-field">
+                <label class="control-field-label">FILENAME</label>
+                <select id="colFilename" class="sel-full"></select>
+              </div>
+              <div class="embed-map-field">
+                <label class="control-field-label">TITLE</label>
+                <select id="colTitle" class="sel-full"></select>
+              </div>
+              <div class="embed-map-field">
+                <label class="control-field-label">KEYWORDS</label>
+                <select id="colKeywords" class="sel-full"></select>
+              </div>
+              <div class="embed-map-field">
+                <label class="control-field-label">DESCRIPTION</label>
+                <select id="colDescription" class="sel-full"></select>
+              </div>
+            </div>
+
+            <div class="embed-toggle-grid">
+              <div class="control-toggle-row">
+                <span>Match Filename Only</span>
+                <label class="switch"><input id="optMatchExt" type="checkbox" checked><span class="switch-track"></span></label>
+              </div>
+              <div class="control-toggle-row">
+                <span>Include Sub-Folders</span>
+                <label class="switch"><input id="optSubfolders" type="checkbox" checked><span class="switch-track"></span></label>
+              </div>
+              <div class="control-toggle-row">
+                <span>Remove Program Name</span>
+                <label class="switch"><input id="optRmProgressive" type="checkbox" checked><span class="switch-track"></span></label>
+              </div>
+              <div class="control-toggle-row">
+                <span>Replace Filename</span>
+                <label class="switch"><input id="optReplaceFilename" type="checkbox"><span class="switch-track"></span></label>
+              </div>
+            </div>
+
+            <div class="embed-start-row">
+              <button id="btnDryRun" class="btn">🔍 Dry Run</button>
+              <button id="btnStartEmbed" class="btn btn-primary embed-start-btn">▶ Start Embedding</button>
+            </div>
+            <div id="dryRunPanel" class="dry-run-panel" style="display:none;">
+              <div class="dry-run-summary" id="dryRunSummary"></div>
+              <div class="dry-run-filters" id="dryRunFilters">
+                <button type="button" class="dry-run-filter-btn active" data-filter="all">All</button>
+                <button type="button" class="dry-run-filter-btn" data-filter="matched">Matched</button>
+                <button type="button" class="dry-run-filter-btn" data-filter="missing_metadata">Missing Metadata</button>
+                <button type="button" class="dry-run-filter-btn" data-filter="missing_image">Missing Image</button>
+                <button type="button" class="dry-run-filter-btn" data-filter="unsupported">Unsupported</button>
+                <button type="button" class="dry-run-filter-btn" data-filter="already_embedded">Already Embedded</button>
+              </div>
+              <div class="dry-run-rows" id="dryRunRows"></div>
+            </div>
+            <div class="progress-wrap" id="embedProgressWrap" style="display:none;">
+              <div class="progress-bar" id="embedProgressBar"></div>
+            </div>
+            <div id="embedCounts" class="status-text">0 succeeded · 0 failed · 0 not found</div>
+          </div>
+        </div>
+
+        <div class="panel embed-log-panel">
+          <div class="embed-log-head">
+            <h2 class="panel-title">Activity Log</h2>
+            <button id="btnClearEmbedLog" class="link-btn">Clear</button>
+          </div>
+          <pre id="embedLog" class="output embed-log"></pre>
+        </div>
+      </section>
+
+      <section id="page-settings" class="page" hidden>
+        <h1 class="page-title">API Manager</h1>
+        <div class="api-tabs-row">
+          <div class="api-tabs" id="apiTabs"></div>
+          <button id="btnModelSettings" class="icon-btn model-settings-btn" title="Enable/disable models">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+            Models
+          </button>
+        </div>
+        <div class="api-layout">
+          <div class="panel api-config-panel">
+            <div class="control-label">CONFIGURATION</div>
+            <label class="control-field-label">Model Selection</label>
+            <select id="apiModelSelect" class="sel-full"></select>
+            <button id="btnApplyModelAll" class="api-apply-btn">Apply to All Keys (<span id="applyAllCount">0</span>)</button>
+
+            <div class="control-label" style="margin-top:18px;">Add New API Key</div>
+            <div class="api-add-row">
+              <input id="apiNewKeyInput" type="password" class="text-input" placeholder="">
+              <button id="apiSaveKeyBtn" class="btn btn-primary">Save</button>
+            </div>
+            <div id="apiKeyValidateStatus" class="hint-text"></div>
+
+            <button id="apiGetKeyBtn" class="api-getkey-btn">🔑 Get API Key from <span id="apiProviderName"></span></button>
+
+            <div class="api-bulk-row">
+              <button id="btnActivateAll" class="btn">Activate All</button>
+              <button id="btnDeactivateAll" class="btn">Deactivate All</button>
+              <button id="btnTestAll" class="btn">🧪 Test All</button>
+              <button id="btnActivateValid" class="btn">✓ Activate Valid Keys</button>
+            </div>
+          </div>
+          <div class="panel api-keys-panel">
+            <div class="control-label">STORED KEYS</div>
+            <div id="apiKeyList" class="api-key-list"></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="page-dashboard" class="page">
+        <h1 class="page-title">Dashboard</h1>
+        <p class="page-subtitle">Overview of your productivity and system status</p>
+
+        <h3 class="section-label">Today's Statistics</h3>
+        <div class="stat-grid" id="statGrid"></div>
+
+        <div class="dash-row dash-row-2">
+          <div class="panel">
+            <h2 class="panel-title">Lifetime Statistics</h2>
+            <div id="lifetimeKv" class="kv-list"></div>
+          </div>
+          <div class="panel">
+            <h2 class="panel-title">AI Usage</h2>
+            <div id="aiUsageKv" class="kv-list"></div>
+            <div class="controls-row" style="margin-top:10px;">
+              <label>Daily limit / key <input id="dailyLimitInput" type="number" class="num"></label>
+            </div>
+          </div>
+        </div>
+
+        <div class="dash-row dash-row-2">
+          <button class="quick-btn quick-blue" data-page="meta">📝 Meta Generator</button>
+          <button class="quick-btn quick-teal" data-page="embed">📦 Meta Embedder</button>
+        </div>
+        <div class="dash-row dash-row-2">
+          <button class="quick-btn quick-orange" data-page="p2p">✨ Prompt-to-Prompt</button>
+          <button class="quick-btn quick-purple" data-page="settings">🔑 API Manager</button>
+        </div>
+        <div class="dash-row dash-row-2">
+          <button class="quick-btn quick-violet" data-page="automation">🗂️ Batch</button>
+        </div>
+
+        <div class="dash-row dash-row-3">
+          <div class="panel">
+            <h2 class="panel-title">Recent Activity</h2>
+            <div id="recentActivity" class="kv-list"></div>
+          </div>
+          <div class="panel">
+            <h2 class="panel-title">🏆 Productivity Insights</h2>
+            <div id="insightsKv" class="kv-list"></div>
+          </div>
+          <div class="panel">
+            <h2 class="panel-title">System Status</h2>
+            <div id="systemKv" class="kv-list"></div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <h2 class="panel-title">Activity (Last 7 Days)</h2>
+          <div class="chart-legend" id="chartLegend"></div>
+          <div id="activityChart" class="chart-wrap"></div>
+        </div>
+      </section>
+
+      <section id="page-p2p" class="page" hidden>
+        <div class="p2p-header-row">
+          <div>
+            <h1 class="page-title" style="margin-bottom:2px;">Prompt-to-Prompt Generator</h1>
+            <p class="hint-text" style="margin:0;">Give it one prompt — get back several fresh variations.</p>
+          </div>
+          <button id="btnP2pReset" class="btn">⟳ Reset</button>
+        </div>
+
+        <div class="api-tabs">
+          <button class="api-tab active" data-p2p-tab="text">📝 From Text</button>
+          <button class="api-tab" data-p2p-tab="image">🖼 From Image</button>
+        </div>
+
+        <div class="p2p-layout">
+          <div class="panel p2p-left-panel">
+            <div id="p2pTextPane">
+              <label class="panel-title" for="p2pOriginal" style="display:block;">Original Prompt</label>
+              <textarea id="p2pOriginal" class="textarea" rows="6" placeholder="Paste the prompt you want variations of…"></textarea>
+              <div class="p2p-word-count" id="p2pOriginalWordCount">0 words</div>
+            </div>
+
+            <div id="p2pImagePane" style="display:none;">
+              <label class="panel-title" style="display:block;">Reference Images (up to 15)</label>
+              <div class="p2p-image-grid" id="p2pImageGrid"></div>
+            </div>
+
+            <div class="p2p-field-label">Generate</div>
+            <div class="p2p-btn-row" id="p2pCountRow">
+              <button class="p2p-choice-btn" data-count="5">5</button>
+              <button class="p2p-choice-btn active" data-count="10">10</button>
+              <button class="p2p-choice-btn" data-count="20">20</button>
+              <button class="p2p-choice-btn" data-count="50">50</button>
+              <button class="p2p-choice-btn" data-count="100">100</button>
+              <button class="p2p-choice-btn" data-count="200">200</button>
+            </div>
+            <input type="hidden" id="p2pCount" value="10">
+
+            <div class="p2p-field-label">Creativity</div>
+            <div class="p2p-btn-row" id="p2pCreativityRow">
+              <button class="p2p-choice-btn" data-creativity="Low">Low</button>
+              <button class="p2p-choice-btn active" data-creativity="Medium">Medium</button>
+              <button class="p2p-choice-btn" data-creativity="High">High</button>
+            </div>
+            <input type="hidden" id="p2pCreativity" value="Medium">
+
+            <div class="p2p-field-label">Prompt Style</div>
+            <select id="p2pStyle" class="sel-full">
+              <option selected>Maintain Original</option>
+              <option>Commercial</option>
+              <option>Creative</option>
+              <option>Minimal</option>
+              <option>Highly Detailed</option>
+            </select>
+
+            <div class="p2p-field-label">Prompt Length (words)</div>
+            <div class="p2p-btn-row" id="p2pLengthRow">
+              <button class="p2p-choice-btn active" data-length="50">50</button>
+              <button class="p2p-choice-btn" data-length="100">100</button>
+              <button class="p2p-choice-btn" data-length="200">200</button>
+              <button class="p2p-choice-btn" data-length="300">300</button>
+              <button class="p2p-choice-btn" data-length="400">400</button>
+              <button class="p2p-choice-btn" data-length="500">500</button>
+            </div>
+            <input type="hidden" id="p2pLength" value="50">
+
+            <div class="control-slider-row"><span>Concurrency</span><span id="p2pConcurrencyVal" class="control-val">3x</span></div>
+            <input id="p2pConcurrency" type="range" min="1" max="20" value="3" class="range-input">
+
+            <button id="btnP2pStart" class="btn btn-primary p2p-generate-btn">✨ Generate</button>
+            <div class="controls-row" style="margin-top:8px;">
+              <button id="btnP2pPause" class="btn" disabled style="flex:1;">⏸ Pause</button>
+              <button id="btnP2pStop" class="btn btn-danger" disabled style="flex:1;">■ Cancel</button>
+            </div>
+            <div class="progress-wrap" id="p2pProgressWrap" style="margin-top:10px;">
+              <div class="progress-bar" id="p2pProgressBar"></div>
+            </div>
+            <div id="p2pStatus" class="status-text">Ready.</div>
+          </div>
+
+          <div class="panel p2p-right-panel drag-scroll-zone">
+            <div class="p2p-results-header">
+              <span class="panel-title" id="p2pResultsCount" style="margin:0;">Generated Prompts (0)</span>
+            </div>
+            <div class="p2p-results-toolbar">
+              <button id="btnP2pSelectAll" class="btn">Select All</button>
+              <button id="btnP2pCopyAll" class="btn">Copy All</button>
+              <button id="btnP2pExportTxt" class="btn">Export TXT</button>
+              <button id="btnP2pExportCsv" class="btn">Export CSV</button>
+            </div>
+            <div id="p2pResults" class="p2p-results">
+              <p class="p2p-empty-hint">Generated prompts will appear here.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="page-appearance" class="page" hidden>
+        <h1 class="page-title">Settings</h1>
+        <div class="panel">
+          <h2 class="panel-title">Theme</h2>
+          <p class="hint-text">Switch the whole app between Dark, White, and Neon themes — applies immediately and is remembered next time you open MetaZone.</p>
+          <div class="theme-mode-row" id="themeModeRow">
+            <button class="theme-mode-btn" data-mode="dark">🌑 Dark</button>
+            <button class="theme-mode-btn" data-mode="light">☀️ White</button>
+            <button class="theme-mode-btn theme-mode-btn-neon" data-mode="neon">⚡ Neon</button>
+          </div>
+        </div>
+        <div class="panel">
+          <h2 class="panel-title">Background Color</h2>
+          <p class="hint-text">Fine-tunes the current theme's base shade — one color, every panel/card shade is generated from it. Dark and White each remember their own.</p>
+          <div class="swatch-row" id="bgSwatches"></div>
+          <label class="hex-label">Hex: <input id="bgHexInput" class="hex-input" type="text"></label>
+        </div>
+        <div class="panel">
+          <h2 class="panel-title">Accent Color</h2>
+          <p class="hint-text">Used for buttons, highlights, and active states.</p>
+          <div class="swatch-row" id="accentSwatches"></div>
+          <label class="hex-label">Hex: <input id="accentHexInput" class="hex-input" type="text"></label>
+          <p class="hint-text" style="margin-top:10px;">Applies immediately — no restart needed.</p>
+          <button id="btnApplyTheme" class="btn btn-primary" style="margin-top:6px;">Apply Theme</button>
+        </div>
+      </section>
+
+      <!-- Batch (formerly "Automation Queue -- BETA"): now a normal
+           in-window nav page, not a separate popup window. Sequential
+           folder processing -- add folders, tune per-folder settings
+           (or use Universal Preset to set them all at once), Start. -->
+      <section id="page-automation" class="page automation-page" hidden>
+        <h1 class="page-title">Batch</h1>
+        <p class="page-subtitle">Sequential folder processing</p>
+
+        <div class="automation-dropzone" id="automationDropzone">
+          <div class="dropzone-icon">📁</div>
+          <div>Drop folders here</div>
+          <button class="btn btn-primary" id="btnAddFolder" type="button">+ Add Folder</button>
+        </div>
+
+        <div class="automation-queue-header">
+          <h3 class="section-label">Queue</h3>
+          <span id="automationQueueCount" class="hint-text"></span>
+        </div>
+        <div id="automationQueueList" class="automation-queue-list">
+          <!-- FolderJob rows injected by automation.js -->
+          <p class="empty-state" id="automationEmptyState">No folders queued yet. Drop a folder above or click "+ Add Folder".</p>
+        </div>
+
+        <div class="automation-progress-banner" id="automationProgressBanner" hidden>
+          <div class="automation-progress-row">
+            <span id="automationCurrentFolder"></span>
+            <span id="automationCurrentStep" class="hint-text"></span>
+          </div>
+          <div class="automation-progress-bar"><div class="automation-progress-fill" id="automationProgressFill"></div></div>
+          <div class="automation-progress-row hint-text">
+            <span id="automationOverallCount"></span>
+            <span id="automationTimeInfo"></span>
+          </div>
+        </div>
+
+        <div class="automation-controls">
+          <button class="btn btn-primary" id="btnStartQueue">▶ Start Queue</button>
+          <button class="btn" id="btnPauseQueue" disabled>⏸ Pause</button>
+          <button class="btn btn-danger" id="btnStopQueue" disabled>■ Stop</button>
+          <button class="btn" id="btnUniversalPreset">🌐 Universal Preset</button>
+          <button class="btn" id="btnAutomationDryRun">🔍 Dry Run</button>
+        </div>
+        <p class="hint-text automation-phase-note" id="automationPhaseNote">
+          Folders process strictly one at a time, in the order shown above. Universal Preset applies one set of settings to every folder above at once; individual folders can still be customized afterward.
+        </p>
+
+        <div class="automation-resume-banner" id="automationResumeBanner" hidden>
+          <span id="automationResumeText"></span>
+          <div>
+            <button class="btn btn-primary" id="btnAutomationResume">Resume</button>
+            <button class="btn btn-danger" id="btnAutomationDiscard">Discard</button>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <template id="automationJobTemplate">
+    <div class="automation-job" draggable="true">
+      <div class="automation-job-drag" title="Drag to reorder">⠿</div>
+      <div class="automation-job-num"></div>
+      <div class="automation-job-info">
+        <div class="automation-job-name"></div>
+        <div class="automation-job-meta"></div>
+      </div>
+      <span class="automation-job-status"></span>
+      <button class="icon-btn automation-job-preset" title="Preset / Settings">⚙</button>
+      <button class="icon-btn automation-job-duplicate" title="Duplicate">⧉</button>
+      <button class="icon-btn automation-job-remove" title="Remove">🗑</button>
+    </div>
+  </template>
+
+  <div class="modal-backdrop" id="automationPresetModal" hidden>
+    <div class="modal-panel automation-preset-panel">
+      <h2 class="panel-title">Folder Settings</h2>
+      <p class="hint-text" id="automationPresetFolderName"></p>
+
+      <label class="hex-label">Preset
+        <select id="automationPresetSelect" class="num"></select>
+      </label>
+
+      <h3 class="section-label" style="margin-top:10px;">Metadata</h3>
+      <label class="hex-label">Title length <input id="automationOptTitleChars" type="number" class="num"></label>
+      <label class="hex-label"><input id="automationOptIncludeDesc" type="checkbox"> Description</label>
+      <label class="hex-label">Description length <input id="automationOptDescChars" type="number" class="num"></label>
+      <label class="hex-label">Keywords <input id="automationOptKwCount" type="number" class="num"></label>
+
+      <h3 class="section-label" style="margin-top:10px;">Prompt</h3>
+      <textarea id="automationOptCustomPrompt" class="automation-prompt-box" rows="3" placeholder="Folder-specific custom instructions…"></textarea>
+
+      <h3 class="section-label" style="margin-top:10px;">Output</h3>
+      <label class="hex-label"><input id="automationOptAutoCsv" type="checkbox"> Auto Save CSV</label>
+      <label class="hex-label"><input id="automationOptAutoEmbed" type="checkbox"> Auto Embed Metadata</label>
+
+      <div class="automation-controls" style="margin-top:14px;">
+        <button class="btn btn-primary" id="btnAutomationSaveSettings">Save</button>
+        <button class="btn" id="btnAutomationCancelSettings">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Universal Preset: same fields as the per-folder modal above,
+       but "Save" applies them to every folder currently in the Batch
+       queue in one shot instead of just the one being edited. -->
+  <div class="modal-backdrop" id="automationUniversalModal" hidden>
+    <div class="modal-panel automation-preset-panel">
+      <h2 class="panel-title">Universal Preset</h2>
+      <p class="hint-text">Define these settings once and apply them to every folder currently in the queue. Individual folders can still be customized afterward.</p>
+
+      <label class="hex-label">Start from preset
+        <select id="automationUniversalPresetSelect" class="num"></select>
+      </label>
+
+      <h3 class="section-label" style="margin-top:10px;">Metadata</h3>
+      <label class="hex-label">Title length <input id="automationUniTitleChars" type="number" class="num"></label>
+      <label class="hex-label"><input id="automationUniIncludeDesc" type="checkbox"> Description</label>
+      <label class="hex-label">Description length <input id="automationUniDescChars" type="number" class="num"></label>
+      <label class="hex-label">Keywords <input id="automationUniKwCount" type="number" class="num"></label>
+
+      <h3 class="section-label" style="margin-top:10px;">Prompt</h3>
+      <textarea id="automationUniCustomPrompt" class="automation-prompt-box" rows="3" placeholder="Instructions applied to every folder…"></textarea>
+
+      <h3 class="section-label" style="margin-top:10px;">Output</h3>
+      <label class="hex-label"><input id="automationUniAutoCsv" type="checkbox"> Auto Save CSV</label>
+      <label class="hex-label"><input id="automationUniAutoEmbed" type="checkbox"> Auto Embed Metadata</label>
+
+      <div class="automation-controls" style="margin-top:14px;">
+        <button class="btn btn-primary" id="btnAutomationUniversalApply">Apply to All Folders</button>
+        <button class="btn" id="btnAutomationUniversalCancel">Cancel</button>
+      </div>
+    </div>
+  </div>
+  <div class="modal-backdrop" id="automationDryRunModal" hidden>
+    <div class="modal-panel">
+      <h2 class="panel-title">Dry Run</h2>
+      <div id="automationDryRunBody"></div>
+      <div class="automation-controls" style="margin-top:14px;">
+        <button class="btn btn-primary" id="btnCloseDryRun">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-backdrop" id="automationReportModal" hidden>
+    <div class="modal-panel">
+      <h2 class="panel-title" id="automationReportTitle">Automation Complete</h2>
+      <div id="automationReportBody"></div>
+      <div class="automation-controls" style="margin-top:14px;">
+        <button class="btn btn-primary" id="btnCloseReport">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <template id="cardTemplate">
+    <div class="card pop-in">
+      <label class="card-select" title="Select this card">
+        <input type="checkbox" class="card-select-check">
+        <span class="card-select-box"></span>
+      </label>
+      <div class="card-thumb-col">
+        <div class="card-thumb"><div class="thumb-placeholder"></div></div>
+        <div class="card-file-info">
+          <div class="card-file-name"></div>
+          <div class="card-file-dims"></div>
+          <div class="card-file-size"></div>
+        </div>
+        <div class="card-thumb-actions">
+          <button class="icon-btn card-regen-btn" title="Regenerate this card">
+            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11A8 8 0 1 0 18.5 16"/><path d="M20 5v6h-6"/></svg>
+          </button>
+          <button class="icon-btn card-delete-btn" title="Delete this card">
+            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16"/><path d="M10 11v6M14 11v6"/><path d="M6 7l1 13a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-13"/><path d="M9 7V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v3"/></svg>
+          </button>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="card-status"></div>
+
+        <div class="card-field" data-field="title">
+          <div class="field-label-row">
+            <span class="field-label">Title <span class="field-count card-title-count"></span></span>
+            <span class="field-actions">
+              <button class="icon-btn field-copy-btn" title="Copy title">
+                <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="1.5"/><path d="M5 15V6.5A2.5 2.5 0 0 1 7.5 4H15"/></svg>
+              </button>
+              <button class="icon-btn field-paste-btn" title="Paste into title">
+                <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="4" width="12" height="17" rx="1.5"/><path d="M9 4V3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1"/><path d="M9 12h6M9 16h4"/></svg>
+              </button>
+            </span>
+          </div>
+          <div class="field-text card-title"></div>
+        </div>
+
+        <div class="card-field card-desc-field" data-field="desc">
+          <div class="field-label-row">
+            <span class="field-label">Description <span class="field-count card-desc-count"></span></span>
+            <span class="field-actions">
+              <button class="icon-btn field-copy-btn" title="Copy description">
+                <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="1.5"/><path d="M5 15V6.5A2.5 2.5 0 0 1 7.5 4H15"/></svg>
+              </button>
+              <button class="icon-btn field-paste-btn" title="Paste into description">
+                <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="4" width="12" height="17" rx="1.5"/><path d="M9 4V3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1"/><path d="M9 12h6M9 16h4"/></svg>
+              </button>
+            </span>
+          </div>
+          <div class="field-text card-desc"></div>
+        </div>
+
+        <div class="card-field" data-field="kw">
+          <div class="field-label-row">
+            <span class="field-label">Keywords <span class="field-count card-kw-count"></span></span>
+            <span class="field-actions">
+              <button class="icon-btn field-copy-btn" title="Copy keywords">
+                <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="1.5"/><path d="M5 15V6.5A2.5 2.5 0 0 1 7.5 4H15"/></svg>
+              </button>
+              <button class="icon-btn field-paste-btn" title="Paste into keywords">
+                <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="4" width="12" height="17" rx="1.5"/><path d="M9 4V3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1"/><path d="M9 12h6M9 16h4"/></svg>
+              </button>
+            </span>
+          </div>
+          <div class="field-text card-kw"></div>
+        </div>
+
+        <div class="card-model"></div>
+      </div>
+      <button class="card-edit-btn" title="Edit this card">✎</button>
+    </div>
+  </template>
+
+  <template id="cardTemplatePrompt">
+    <div class="card pop-in">
+      <div class="card-thumb-col">
+        <div class="card-thumb"><div class="thumb-placeholder"></div></div>
+        <div class="card-thumb-actions">
+          <button class="icon-btn card-regen-btn" title="Regenerate this card">
+            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11A8 8 0 1 0 18.5 16"/><path d="M20 5v6h-6"/></svg>
+          </button>
+          <button class="icon-btn card-delete-btn" title="Delete this card">
+            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16"/><path d="M10 11v6M14 11v6"/><path d="M6 7l1 13a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-13"/><path d="M9 7V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v3"/></svg>
+          </button>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="card-status"></div>
+
+        <div class="card-field" data-field="prompt">
+          <div class="field-label-row">
+            <span class="field-label">Prompt <span class="field-count card-prompt-count"></span></span>
+            <span class="field-actions">
+              <button class="icon-btn field-copy-btn" title="Copy prompt">⧉</button>
+              <button class="icon-btn field-paste-btn" title="Paste into prompt">📋</button>
+            </span>
+          </div>
+          <div class="field-text card-prompt"></div>
+        </div>
+
+        <div class="card-model"></div>
+      </div>
+      <button class="card-edit-btn" title="Edit this card">✎</button>
+    </div>
+  </template>
+
+  <template id="keyCardTemplate">
+    <div class="key-card">
+      <div class="key-card-top">
+        <span class="key-icon">🔑</span>
+        <span class="key-nickname" title="Click to rename"></span>
+        <span class="key-masked"></span>
+        <span class="key-status-badge">UNKNOWN</span>
+        <span class="key-active-pill">● Active</span>
+      </div>
+      <div class="key-card-meta"></div>
+      <div class="key-card-actions">
+        <button class="icon-btn key-eye-btn" title="Show/hide">👁</button>
+        <button class="icon-btn key-copy-btn" title="Copy">⧉</button>
+        <button class="icon-btn key-test-btn" title="Test">? Test</button>
+        <button class="key-toggle-btn"></button>
+        <button class="icon-btn key-delete-btn" title="Delete">🗑</button>
+      </div>
+    </div>
+  </template>
+
+  <script src="js/animate.js"></script>
+  <script src="js/events.js"></script>
+  <script src="js/toast.js"></script>
+  <script src="js/confirm.js"></script>
+  <script src="js/theme.js"></script>
+  <script src="js/nav.js"></script>
+  <script src="js/chrome.js"></script>
+  <script src="js/app.js"></script>
+  <script src="js/promptgen.js"></script>
+  <script src="js/embed.js"></script>
+  <script src="js/settings.js"></script>
+  <script src="js/dashboard.js"></script>
+  <script src="js/p2p.js"></script>
+  <script src="js/appearance.js"></script>
+  <script src="js/dragscroll.js"></script>
+  <script src="js/automation.js"></script>
+</body>
+</html>

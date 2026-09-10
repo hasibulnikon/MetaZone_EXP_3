@@ -1,0 +1,169 @@
+/* ============================================================
+   MetaZone reusable animation system
+   ------------------------------------------------------------
+   Add/remove these classes from JS (see js/animate.js's `Animate`
+   helper) rather than writing one-off transitions per component,
+   so the whole app shares one consistent motion vocabulary.
+
+   Style: smooth, subtle, fast, professional -- opacity + transform
+   only, 120-250ms, no bounce/elastic/overshoot. Never delays the
+   actual state change; the animation rides alongside it.
+   ============================================================ */
+
+/* ---- Page / section fade-in (existing hook, kept + refined) ---- */
+.fade-target { animation: fadeIn 220ms cubic-bezier(0.16, 0.8, 0.3, 1); }
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ---- Page-level crossfade (nav.js page switches) --------------
+   Pure opacity, no transform -- earlier versions moved the page
+   vertically while fading (translateY), which read as the old page
+   "sliding down" while the new one appeared. Top-level page changes
+   should just be a plain fade in / fade out with nothing shifting
+   position. Smaller elements (cards, rows, panels) keep their own
+   translate-based animations elsewhere in this file -- this pure-fade
+   pair is specifically for full-page transitions. */
+.page-fade-in { animation: pageFadeIn 200ms ease-out; }
+@keyframes pageFadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+.page-fade-out { animation: pageFadeOut 160ms ease-in forwards; }
+@keyframes pageFadeOut {
+  from { opacity: 1; }
+  to   { opacity: 0; }
+}
+
+/* ---- Page / section fade-out (used right before a page is hidden,
+   so switching pages crossfades instead of hard-cutting) ---- */
+.fade-out-target { animation: fadeOutPage 160ms cubic-bezier(0.4, 0, 1, 1) forwards; }
+@keyframes fadeOutPage {
+  from { opacity: 1; transform: translateY(0); }
+  to   { opacity: 0; transform: translateY(-4px); }
+}
+
+/* Generic fade-out for smaller elements (rows, cards, banners) that
+   get removed/hidden entirely once the animation ends. */
+.fade-out { animation: fadeOut 150ms cubic-bezier(0.4, 0, 1, 1) forwards; }
+@keyframes fadeOut {
+  from { opacity: 1; transform: translateY(0); }
+  to   { opacity: 0; transform: translateY(-3px); }
+}
+
+.slide-in-right { animation: slideInRight 200ms cubic-bezier(0.2, 0.8, 0.2, 1); }
+@keyframes slideInRight {
+  from { transform: translateX(16px); opacity: 0; }
+  to   { transform: translateX(0); opacity: 1; }
+}
+
+/* ---- Cards / grid items popping into place ---- */
+.pop-in { animation: popIn 190ms cubic-bezier(0.16, 0.8, 0.3, 1) both; }
+@keyframes popIn {
+  from { transform: scale(0.97) translateY(4px); opacity: 0; }
+  to   { transform: scale(1) translateY(0); opacity: 1; }
+}
+
+/* Same shape as .stat-card/.kv-row's built-in fadeInUp -- exposed
+   generically so any freshly-rendered list item can opt in just by
+   getting this class at creation time, no JS animation code needed. */
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.fade-in-up { animation: fadeInUp 200ms var(--ease) both; }
+
+/* Small stagger steps for JS-driven batches (Animate.staggerIn adds
+   one of these to each item in sequence, capped at 8 so a big batch
+   doesn't start feeling sluggish -- everything after item 8 shares
+   the same, still-short, final delay). */
+.stagger-0 { animation-delay: 0ms; }
+.stagger-1 { animation-delay: 20ms; }
+.stagger-2 { animation-delay: 40ms; }
+.stagger-3 { animation-delay: 60ms; }
+.stagger-4 { animation-delay: 80ms; }
+.stagger-5 { animation-delay: 100ms; }
+.stagger-6 { animation-delay: 120ms; }
+.stagger-7 { animation-delay: 140ms; }
+
+/* ---- Panels / collapsible sections opening & closing ----
+   Generic hooks for any panel that toggles visibility via a class
+   instead of the `hidden` attribute (which can't be animated).
+   Direction-agnostic: .panel-open-down slides content down from
+   above, .panel-open-up slides it up from below. */
+.panel-open-down { animation: panelOpenDown 200ms cubic-bezier(0.16, 0.8, 0.3, 1) both; }
+@keyframes panelOpenDown {
+  from { opacity: 0; transform: translateY(-8px) scale(0.99); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+.panel-close-down { animation: panelCloseDown 150ms cubic-bezier(0.4, 0, 1, 1) both; }
+@keyframes panelCloseDown {
+  from { opacity: 1; transform: translateY(0) scale(1); }
+  to   { opacity: 0; transform: translateY(-6px) scale(0.99); }
+}
+.panel-open-up { animation: panelOpenUp 200ms cubic-bezier(0.16, 0.8, 0.3, 1) both; }
+@keyframes panelOpenUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.panel-close-up { animation: panelCloseUp 150ms cubic-bezier(0.4, 0, 1, 1) both; }
+@keyframes panelCloseUp {
+  from { opacity: 1; transform: translateY(0); }
+  to   { opacity: 0; transform: translateY(6px); }
+}
+
+/* ---- Modal / dialog (reusable even though this build has no modal
+   yet -- any future one gets this for free by using these classes on
+   the overlay + dialog box). ---- */
+.modal-overlay-in { animation: modalOverlayIn 180ms var(--ease) both; }
+@keyframes modalOverlayIn { from { opacity: 0; } to { opacity: 1; } }
+.modal-overlay-out { animation: modalOverlayOut 160ms cubic-bezier(0.4, 0, 1, 1) both; }
+@keyframes modalOverlayOut { from { opacity: 1; } to { opacity: 0; } }
+
+.modal-box-in { animation: modalBoxIn 200ms cubic-bezier(0.16, 0.8, 0.3, 1) both; }
+@keyframes modalBoxIn {
+  from { opacity: 0; transform: scale(0.98) translateY(4px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+.modal-box-out { animation: modalBoxOut 160ms cubic-bezier(0.4, 0, 1, 1) both; }
+@keyframes modalBoxOut {
+  from { opacity: 1; transform: scale(1) translateY(0); }
+  to   { opacity: 0; transform: scale(0.98) translateY(4px); }
+}
+
+/* ---- Dropdowns / small floating menus ---- */
+.dropdown-in { animation: dropdownIn 160ms cubic-bezier(0.16, 0.8, 0.3, 1) both; }
+@keyframes dropdownIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.dropdown-out { animation: dropdownOut 120ms cubic-bezier(0.4, 0, 1, 1) both; }
+@keyframes dropdownOut {
+  from { opacity: 1; transform: translateY(0); }
+  to   { opacity: 0; transform: translateY(-3px); }
+}
+
+/* ---- Notifications / toasts (reusable, not yet used by any
+   component in this build -- status feedback currently goes through
+   inline .status-text, but any future toast gets consistent motion
+   for free by using these two classes). ---- */
+.toast-in { animation: toastIn 200ms cubic-bezier(0.16, 0.8, 0.3, 1) both; }
+@keyframes toastIn {
+  from { opacity: 0; transform: translateX(20px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+.toast-out { animation: toastOut 160ms cubic-bezier(0.4, 0, 1, 1) both; }
+@keyframes toastOut {
+  from { opacity: 1; transform: translateX(0); }
+  to   { opacity: 0; transform: translateX(20px); }
+}
+
+/* ---- Generic "something changed" pulse -- used for status text
+   swaps, count updates, and any small in-place value change that
+   should read as a smooth transition rather than a jump cut. ---- */
+.pulse-update { animation: pulseUpdate 260ms var(--ease); }
+@keyframes pulseUpdate {
+  0%   { opacity: 0.35; }
+  100% { opacity: 1; }
+}
